@@ -86,8 +86,8 @@ class CongruentialRand is Random
 class DiceRoll
   let _random: SimpleRand
 
-  new create(seed: U64) =>
-    _random = SimpleRand(seed)
+  new create(rand: SimpleRand) =>
+    _random = rand
 
   fun ref apply(probability: U64): Bool =>
     _random.nextInt(100) < probability.u32()
