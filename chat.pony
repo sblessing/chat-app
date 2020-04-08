@@ -20,7 +20,7 @@ primitive Compute
 type Action is
   ( Post
   | Leave
-  | Invite 
+  | Invite
   | Compute
   | None
   )
@@ -49,13 +49,13 @@ class val BehaviorFactory
     elseif dice(_invite) then
       action = Invite
     end
-    
+
     action
 
 actor Chat
   let _members: ClientSet
   var _buffer: Array[(Array[U8] val | None)]
-  
+
   new create(initiator: Client) =>
     _members = ClientSet
     _buffer =  Array[(Array[U8] val | None)]
@@ -71,7 +71,7 @@ actor Chat
 
     if _members.size() > 0 then
       accumulator.bump(_members.size())
-    
+
       for member in _members.values() do
         member.forward(this, payload, accumulator)
       end
@@ -81,21 +81,21 @@ actor Chat
 
   be join(client: Client, accumulator: Accumulator) =>
     _members.set(client)
-   
+
     ifdef "_BENCH_NO_BUFFERED_CHATS" then
        accumulator.stop()
     else
       if _buffer.size() > 0 then
         accumulator.bump(_buffer.size())
-    
+
         for message in _buffer.values() do
           client.forward(this, message, accumulator)
         end
-      else 
+      else
         accumulator.stop()
-      end  
+      end
     end
-  
+
   be leave(client: Client, did_logout: Bool, accumulator: (Accumulator | None)) =>
     _members.unset(client)
     client.left(this, did_logout, accumulator)
@@ -112,23 +112,23 @@ actor Client
     _id = id
     _friends = FriendSet
     _chats = ChatSet
-    _directory = directory  
     _dice = DiceRoll(seed)
+    _directory = directory
     _rand = SimpleRand(seed)
 
   be befriend(client: Client) =>
     _friends.set(client)
-  
+
   be logout() =>
     for chat in _chats.values() do
       chat.leave(this, true, None)
-    else 
+    else
       _directory.left(_id)
     end
 
   be left(chat: Chat, did_logout: Bool, accumulator: (Accumulator | None)) =>
     _chats.unset(chat)
-      
+
     if ( _chats.size() == 0 ) and did_logout then
       _directory.left(_id)
     else
@@ -150,7 +150,7 @@ actor Client
 
     // Pony has no implicit conversion from Seq to Array.
     var chat = Chat(this)
-    
+
     for c in _chats.values() do
       if i == index then
         break
@@ -163,7 +163,7 @@ actor Client
     | Post => chat.post(None, accumulator)
     | Leave => chat.leave(this, false, accumulator)
     | Compute => Fibonacci(35) ; accumulator.stop()
-    | Invite => 
+    | Invite =>
       let created = Chat(this)
 
       // Again convert the set values to an array, in order
@@ -190,7 +190,7 @@ actor Client
           //pick random index k??
           try f(k)?.invite(created, accumulator) end
         end
-      end      
+      end
     else
       accumulator.stop()
     end
@@ -212,7 +212,7 @@ actor Directory
     let befriend: U32 = _befriend.u32()
 
     _clients(id) = new_client
-    
+
     for client in _clients.values() do
       if _random.nextInt(100) < befriend then
         client.befriend(new_client)
@@ -242,7 +242,7 @@ actor Directory
     end
 
   be disconnect(poker: Poker) =>
-    _poker = poker 
+    _poker = poker
 
     for c in _clients.values() do
       c.logout()
@@ -294,7 +294,7 @@ actor Poker
   var _last: Bool
   var _turn_series: Array[F64]
   var _env: Env
-  
+
   new create(clients: U64, turns: U64, directories: Array[Directory] val, factory: BehaviorFactory, env: Env) =>
     _clients = clients
     _logouts = 0
@@ -340,7 +340,7 @@ actor Poker
 
       _runtimes.push(accumulator)
     end
-    
+
   be confirm() =>
     if (_confirmations = _confirmations - 1 ) == 1 then
       for d in _directories.values() do
@@ -354,7 +354,7 @@ actor Poker
 
       for accumulator in _runtimes.values() do
         _accumulations = _accumulations + 1
-        accumulator.print(this, _iteration, turn)    
+        accumulator.print(this, _iteration, turn)
         turn = turn + 1
       end
 
@@ -372,24 +372,24 @@ actor Poker
 
       match _bench
       | let bench: AsyncBenchmarkCompletion => bench.complete()
-      
+
         if _last then
           let stats = SampleStats(_turn_series = Array[F64])
           var turns = Array[Array[F64]]
           var qos = Array[F64]
 
           for k in Range[USize](0, _turns.usize()) do
-            try 
-              turns(k)? 
-            else 
-              turns.push(Array[F64]) 
+            try
+              turns(k)?
+            else
+              turns.push(Array[F64])
             end
 
-            for iter in _finals.values() do 
+            for iter in _finals.values() do
               try turns(k)?.push(iter(k)?) end
             end
           end
-          
+
           for l in Range[USize](0, turns.size()) do
             try qos.push(SampleStats(turns.pop()?).stddev()) end
           end
@@ -450,7 +450,7 @@ class iso ChatApp is AsyncActorBenchmark
       for i in Range[USize](0, directories.usize()) do
         dirs.push(Directory(rand.next(), befriend))
       end
-        
+
       dirs
     end
 
@@ -464,7 +464,7 @@ class iso ChatApp is AsyncActorBenchmark
     new create(env: Env) =>
       try
         let cs =
-          recover 
+          recover
             CommandSpec.leaf("chat-app", "Cross Language Actor Benchmark", [
               OptionSpec.u64("clients", "The number of clients. Defaults to 1024."
                 where short' = 'c', default' = U64(1024))
@@ -497,7 +497,7 @@ class iso ChatApp is AsyncActorBenchmark
       else
         env.exitcode(-1)
         return
-      end  
+      end
 
   fun tag benchmarks(bench: Runner, env: Env, cmd: Command val) =>
     bench(32, ChatApp(env, cmd))
