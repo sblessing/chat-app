@@ -112,9 +112,10 @@ actor Client
     _id = id
     _friends = FriendSet
     _chats = ChatSet
-    _dice = DiceRoll(seed)
     _directory = directory
     _rand = SimpleRand(seed)
+    _dice = DiceRoll(_rand)
+
 
   be befriend(client: Client) =>
     _friends.set(client)
