@@ -306,14 +306,13 @@ actor Poker
   var _last: Bool
   var _turn_series: Array[F64]
 
-  new create(clients: U64, turns: U64, directories: Array[Directory] val, factory: BehaviorFactory) =>
+  new create(clients: U64, turns: U64, directories: USize, befriend: U64, factory: BehaviorFactory) =>
     _actions = ActionMap
     _clients = clients
     _logouts = 0
     _confirmations = 0
     _turns = turns
     _iteration = 0
-    _directories = directories
     _runtimes = Array[Accumulator]
     _accumulations = 0
     _finals = Array[Array[F64]]
@@ -321,6 +320,19 @@ actor Poker
     _bench = None
     _last = false
     _turn_series = Array[F64]
+
+    let rand = SimpleRand(42)
+
+    _directories = recover
+      let dirs = Array[Directory](directories)
+
+      for i in Range[USize](0, directories.usize()) do
+        dirs.push(Directory(rand.next(), befriend))
+      end
+
+      dirs
+    end
+
 
   be apply(bench: AsyncBenchmarkCompletion, last: Bool) =>
     _confirmations = _turns.usize()
@@ -467,7 +479,6 @@ actor Poker
 class iso ChatApp is AsyncActorBenchmark
   var _clients: U64
   var _turns: U64
-  var _directories: Array[Directory] val
   var _factory: BehaviorFactory val
   var _poker: Poker
 
@@ -481,21 +492,10 @@ class iso ChatApp is AsyncActorBenchmark
     let leave: U64 = cmd.option("leave").u64()
     let invite: U64 = cmd.option("invite").u64()
     let befriend: U64 = cmd.option("befriend").u64()
-    let rand = SimpleRand(42)
 
     _factory = recover BehaviorFactory(compute, post, leave, invite) end
 
-    _directories = recover
-      let dirs = Array[Directory](directories)
-
-      for i in Range[USize](0, directories.usize()) do
-        dirs.push(Directory(rand.next(), befriend))
-      end
-
-      dirs
-    end
-
-    _poker = Poker(_clients, _turns, _directories, _factory)
+    _poker = Poker(_clients, _turns, directories, befriend, _factory)
 
   fun box apply(c: AsyncBenchmarkCompletion, last: Bool) => _poker(c, last)
 
