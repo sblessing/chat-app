@@ -12,14 +12,14 @@ class SimpleRand is Random
   fun ref nextLong(): U64 =>
     _value = ((_value * 1309) + 13849) and 65535
     _value
-  
+
   fun ref nextInt(max: U32 = 0): U32 =>
     if max == 0 then
       nextLong().u32()
     else
       nextLong().u32() % max
     end
-  
+
   fun ref nextDouble(): F64 =>
     1.0 / (nextLong() + 1).f64()
 
@@ -30,7 +30,7 @@ class CongruentialRand is Random
 
   new create(x: U64, y: U64 = 0) =>
     _x = (x xor U64(0x5DEECE66D)) and ((U64(1) << 48) -1)
-    
+
   fun ref next_mask(bits: U64): U64 =>
     next() >> U64(48 - bits)
 
@@ -56,7 +56,7 @@ class CongruentialRand is Random
   fun ref nextGaussian(): F64 =>
     """
     Returns the next gaussian normally distributed
-    random number with mean 0.0 and a standard 
+    random number with mean 0.0 and a standard
     deviation of 1.0. Implemented using the polar
     method as described by G.E.P Box, M.E. Muller
     and G. Marsaglia.
@@ -86,8 +86,8 @@ class CongruentialRand is Random
 class DiceRoll
   let _random: SimpleRand
 
-  new create(seed: U64) =>
-    _random = SimpleRand(seed)
+  new create(rand: SimpleRand) =>
+    _random = rand
 
   fun ref apply(probability: U64): Bool =>
     _random.nextInt(100) < probability.u32()
