@@ -177,12 +177,11 @@ actor Client
         f.push(friend)
       end
 
-      let s = Rand(_rand.next())
-      s.shuffle[Client](f)
+      _rand.shuffle[Client](f)
 
       f.unshift(this)
 
-      var invitations: USize = s.next().usize() % _friends.size()
+      var invitations: USize = _rand.next().usize() % _friends.size()
 
       if invitations == 0 then
         accumulator.stop(Invite)
