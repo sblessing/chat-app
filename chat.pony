@@ -7,10 +7,8 @@ use "math"
 use "format"
 use "term"
 
-type ClientMap is Map[U64, Client]
-type FriendSet is SetIs[Client]
-type ChatSet is SetIs[Chat]
-type ClientSet is SetIs[Client]
+type ClientSeq is Array[Client]
+type ChatSeq is Array[Chat]
 
 primitive Post
 primitive Leave
@@ -55,14 +53,14 @@ class val BehaviorFactory
     action
 
 actor Chat
-  let _members: ClientSet
+  let _members: ClientSeq
   var _buffer: Array[(Array[U8] val | None)]
 
   new create(initiator: Client) =>
-    _members = ClientSet
+    _members = ClientSeq
     _buffer =  Array[(Array[U8] val | None)]
 
-    _members.set(initiator)
+    _members.push(initiator)
 
   be post(payload: (Array[U8] val | None), accumulator: Accumulator) =>
     ifdef "_BENCH_NO_BUFFERED_CHATS" then
@@ -82,7 +80,7 @@ actor Chat
     end
 
   be join(client: Client, accumulator: Accumulator) =>
-    _members.set(client)
+    _members.push(client)
 
     ifdef "_BENCH_NO_BUFFERED_CHATS" then
        accumulator.stop(Invite)
@@ -99,41 +97,49 @@ actor Chat
     end
 
   be leave(client: Client, did_logout: Bool, accumulator: (Accumulator | None)) =>
-    _members.unset(client)
+    for (i, c) in _members.pairs() do
+      if c is client then
+        _members.remove(i, 1) ; break
+      end
+    end
+
     client.left(this, did_logout, accumulator)
 
 actor Client
   let _id: U64
-  let _friends: FriendSet
-  let _chats: ChatSet
+  let _friends: ClientSeq
+  let _chats: ChatSeq
   let _directory: Directory
   let _dice: DiceRoll
   let _rand: SimpleRand
 
   new create(id: U64, directory: Directory, seed: U64) =>
     _id = id
-    _friends = FriendSet
-    _chats = ChatSet
+    _friends = ClientSeq
+    _chats = ChatSeq
     _directory = directory
     _rand = SimpleRand(seed)
     _dice = DiceRoll(_rand)
 
-
   be befriend(client: Client) =>
-    _friends.set(client)
+    _friends.push(client)
 
   be logout() =>
     for chat in _chats.values() do
       chat.leave(this, true, None)
     else
-      _directory.left(_id)
+      _directory.left(this)
     end
 
   be left(chat: Chat, did_logout: Bool, accumulator: (Accumulator | None)) =>
-    _chats.unset(chat)
+    for (i, c) in _chats.pairs() do
+      if c is chat then
+        _chats.remove(i, 1) ; break
+      end
+    end
 
     if ( _chats.size() == 0 ) and did_logout then
-      _directory.left(_id)
+      _directory.left(this)
     else
       match accumulator
       | let accumulator': Accumulator => accumulator'.stop(Leave)
@@ -141,7 +147,7 @@ actor Client
     end
 
   be invite(chat: Chat, accumulator: Accumulator) =>
-    _chats.set(chat)
+    _chats.push(chat)
     chat.join(this, accumulator)
 
   be forward(chat: Chat, payload: (Array[U8] val | None), accumulator: Accumulator) =>
@@ -149,63 +155,49 @@ actor Client
 
   be act(behavior: BehaviorFactory, accumulator: Accumulator) =>
     let index = _rand.nextInt(_chats.size().u32()).usize()
-    var i: USize = 0
 
-    // Pony has no implicit conversion from Seq to Array.
-    var chat = Chat(this)
+    try
+      match behavior(_dice)
+      | Post => _chats(index)?.post(None, accumulator)
+      | Leave => _chats(index)?.leave(this, false, accumulator)
+      | Compute => Fibonacci(35) ; accumulator.stop(Compute)
+      | Invite =>
+        let created = Chat(this)
 
-    for c in _chats.values() do
-      if i == index then
-        break
-      end
+        // Again convert the set values to an array, in order
+        // to be able to use shuffle from rand
+        let f = _friends.clone()
+        let s = Rand(_rand.next())
 
-      i = i + 1 ; chat = c
-    end
+        s.shuffle[Client](f)
+        f.unshift(this)
 
-    match behavior(_dice)
-    | Post => chat.post(None, accumulator)
-    | Leave => chat.leave(this, false, accumulator)
-    | Compute => Fibonacci(35) ; accumulator.stop(Compute)
-    | Invite =>
-      let created = Chat(this)
+        var invitations: USize = s.next().usize() % _friends.size()
 
-      // Again convert the set values to an array, in order
-      // to be able to use shuffle from rand
-      let f = Array[Client](_friends.size())
+        if invitations == 0 then
+          accumulator.stop(Invite)
+        else
+          accumulator.bump(invitations)
 
-      for friend in _friends.values() do
-        f.push(friend)
-      end
-
-      let s = Rand(_rand.next())
-      s.shuffle[Client](f)
-
-      f.unshift(this)
-
-      var invitations: USize = s.next().usize() % _friends.size()
-
-      if invitations == 0 then
-        accumulator.stop(Invite)
-      else
-        accumulator.bump(invitations)
-
-        for k in Range[USize](0, invitations) do
-          //pick random index k??
-          try f(k)?.invite(created, accumulator) end
+          for k in Range[USize](0, invitations) do
+            try f(k)?.invite(created, accumulator) end
+          end
         end
+      else
+        accumulator.stop()
       end
     else
       accumulator.stop()
     end
 
 actor Directory
-  let _clients: ClientMap
+  let _clients: ClientSeq
   let _random: SimpleRand
   let _befriend: U64
   var _poker: (Poker | None)
 
   new create(seed: U64, befriend: U64) =>
-    _clients = ClientMap
+    _clients = ClientSeq
     _random = SimpleRand(seed)
     _befriend = befriend
     _poker = None
@@ -214,7 +206,7 @@ actor Directory
     let new_client = Client(id, this, _random.next())
     let befriend: U32 = _befriend.u32()
 
-    _clients(id) = new_client
+    _clients.push(new_client)
 
     for client in _clients.values() do
       if _random.nextInt(100) < befriend then
@@ -223,22 +215,19 @@ actor Directory
       end
     end
 
-  be logout(id: U64) =>
-    try
-      _clients(id)?.logout()
-    end
-
-  be left(id: U64) =>
-    try
-      _clients.remove(id)?
-
-      if _clients.size() == 0 then
-        match _poker
-        | let poker: Poker => poker.finished()
-        end
+  be left(client: Client) =>
+    for (i, c) in _clients.pairs() do
+      if c is client then
+        _clients.remove(i, 1) ; break
       end
     end
 
+    if _clients.size() == 0 then
+      match _poker
+      | let poker: Poker => poker.finished()
+      end
+    end
+    
   be poke(factory: BehaviorFactory, accumulator: Accumulator) =>
     for client in _clients.values() do
       client.act(factory, accumulator)
