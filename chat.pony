@@ -25,6 +25,8 @@ type Action is
   | None
   )
 
+type ActionMap is MapIs[Action, U64]
+
 class val BehaviorFactory
   let _compute: U64
   let _post: U64
@@ -76,14 +78,14 @@ actor Chat
         member.forward(this, payload, accumulator)
       end
     else
-      accumulator.stop()
+      accumulator.stop(Post)
     end
 
   be join(client: Client, accumulator: Accumulator) =>
     _members.set(client)
 
     ifdef "_BENCH_NO_BUFFERED_CHATS" then
-       accumulator.stop()
+       accumulator.stop(Invite)
     else
       if _buffer.size() > 0 then
         accumulator.bump(_buffer.size())
@@ -92,7 +94,7 @@ actor Chat
           client.forward(this, message, accumulator)
         end
       else
-        accumulator.stop()
+        accumulator.stop(Invite)
       end
     end
 
@@ -134,7 +136,7 @@ actor Client
       _directory.left(_id)
     else
       match accumulator
-      | let accumulator': Accumulator => accumulator'.stop()
+      | let accumulator': Accumulator => accumulator'.stop(Leave)
       end
     end
 
@@ -143,7 +145,7 @@ actor Client
     chat.join(this, accumulator)
 
   be forward(chat: Chat, payload: (Array[U8] val | None), accumulator: Accumulator) =>
-    accumulator.stop()
+    accumulator.stop(Post)
 
   be act(behavior: BehaviorFactory, accumulator: Accumulator) =>
     let index = _rand.nextInt(_chats.size().u32()).usize()
@@ -163,7 +165,7 @@ actor Client
     match behavior(_dice)
     | Post => chat.post(None, accumulator)
     | Leave => chat.leave(this, false, accumulator)
-    | Compute => Fibonacci(35) ; accumulator.stop()
+    | Compute => Fibonacci(35) ; accumulator.stop(Compute)
     | Invite =>
       let created = Chat(this)
 
@@ -183,7 +185,7 @@ actor Client
       var invitations: USize = s.next().usize() % _friends.size()
 
       if invitations == 0 then
-        accumulator.stop()
+        accumulator.stop(Invite)
       else
         accumulator.bump(invitations)
 
@@ -251,6 +253,7 @@ actor Directory
 
 actor Accumulator
   let _poker: Poker
+  var _actions: ActionMap iso
   var _start: F64
   var _end: F64
   var _duration: F64
@@ -259,6 +262,7 @@ actor Accumulator
 
   new create(poker: Poker, expected: USize) =>
     _poker = poker
+    _actions = recover ActionMap end
     _start = Time.millis().f64()
     _end = 0
     _duration = 0
@@ -268,7 +272,13 @@ actor Accumulator
   be bump(expected: USize) =>
     _expected = ( _expected + expected ) - 1
 
-  be stop() =>
+  be stop(action: Action = None) =>
+    try
+      _actions(action) = _actions(action)? + 1
+    else
+      _actions(action) = 1
+    end
+
     if (_expected = _expected - 1) == 1 then
       _end = Time.millis().f64()
       _duration = _end - _start
@@ -278,9 +288,10 @@ actor Accumulator
     end
 
    be print(poker: Poker, i: USize, j: USize) =>
-     poker.collect(i, j, _duration)
+     poker.collect(i, j, _duration, _actions = recover ActionMap end)
 
 actor Poker
+  let _actions: ActionMap
   var _clients: U64
   var _logouts: USize
   var _confirmations: USize
@@ -297,6 +308,7 @@ actor Poker
   var _env: Env
 
   new create(clients: U64, turns: U64, directories: Array[Directory] val, factory: BehaviorFactory, env: Env) =>
+    _actions = ActionMap
     _clients = clients
     _logouts = 0
     _confirmations = 0
@@ -362,7 +374,15 @@ actor Poker
       _runtimes = Array[Accumulator]
     end
 
-  be collect(i: USize, j: USize, duration: F64) =>
+  be collect(i: USize, j: USize, duration: F64, actions: ActionMap val) =>
+    for (key, value) in actions.pairs() do
+      try
+        _actions(key) = value + _actions(key)?
+      else
+        _actions(key) = value
+      end
+    end
+
     try
       _finals(i)?(j)? = duration
       _turn_series.push(duration)
@@ -420,6 +440,28 @@ actor Poker
               ].values()
             )
           )
+
+          bench.append("")
+
+          for (key, value) in _actions.pairs() do
+            // could make 'Actions' stringable
+            let identifier =
+              match key
+              | Post    => "Post"
+              | Leave   => "Leave"
+              | Invite  => "Invite"
+              | Compute => "Compute"
+              | None    => "None"
+              end
+
+            bench.append(
+              "".join([
+                  Format(identifier where width = 8)
+                  Format(value.string() where width = 10, align = AlignRight)
+                ].values()
+              )
+            )
+          end
         end
       end
     end
