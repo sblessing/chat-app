@@ -1,1 +1,6 @@
 chat-app
+*.exe
+*.exp
+*.ilk
+*.lib
+*.pdb
