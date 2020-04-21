@@ -279,7 +279,8 @@ actor Accumulator
       _actions(action) = 1
     end
 
-    if (_expected = _expected - 1) == 1 then
+    _expected = _expected - 1
+    if _expected == 0 then
       _end = Time.millis().f64()
       _duration = _end - _start
       _did_stop = true
@@ -355,14 +356,16 @@ actor Poker
     end
 
   be confirm() =>
-    if (_confirmations = _confirmations - 1 ) == 1 then
+    _confirmations = _confirmations - 1
+    if _confirmations == 0 then
       for d in _directories.values() do
         d.disconnect(this)
       end
     end
 
   be finished() =>
-    if (_logouts = _logouts - 1 ) == 1 then
+    _logouts = _logouts - 1
+    if _logouts == 0 then
       var turn: USize = 0
 
       for accumulator in _runtimes.values() do
@@ -388,7 +391,8 @@ actor Poker
       _turn_series.push(duration)
     end
 
-    if ( _accumulations = _accumulations - 1 ) == 1 then
+    _accumulations = _accumulations - 1
+    if _accumulations == 0 then
       _iteration = _iteration + 1
 
       match _bench
