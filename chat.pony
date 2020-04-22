@@ -167,7 +167,7 @@ actor Client
       | Invite =>
         let created = Chat(this)
 
-        _chats.push(this)
+        _chats.push(created)
 
         // Again convert the set values to an array, in order
         // to be able to use shuffle from rand
