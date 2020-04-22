@@ -70,6 +70,9 @@ actor Chat
     end
 
     if _members.size() > 0 then
+      // In distributed settings, which are not Pony,
+      // there is race between bump and forward. Take
+      // care!
       accumulator.bump(_members.size())
 
       for member in _members.values() do
@@ -164,13 +167,14 @@ actor Client
       | Invite =>
         let created = Chat(this)
 
+        _chats.push(this)
+
         // Again convert the set values to an array, in order
         // to be able to use shuffle from rand
         let f = _friends.clone()
         let s = Rand(_rand.next())
 
         s.shuffle[Client](f)
-        f.unshift(this)
 
         var invitations: USize = s.next().usize() % _friends.size()
 
