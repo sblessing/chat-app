@@ -1,10 +1,8 @@
-use "random"
-
-class SimpleRand is Random
+class SimpleRand
   var _value: U64
 
-  new create(x: U64, y: U64 = 0) =>
-    _value = x
+  new create(seed: U64) =>
+    _value = seed
 
   fun ref next(): U64 =>
     nextLong()
@@ -23,7 +21,19 @@ class SimpleRand is Random
   fun ref nextDouble(): F64 =>
     1.0 / (nextLong() + 1).f64()
 
-class CongruentialRand is Random
+  fun ref shuffle[A](array: Array[A]) =>
+    """
+    Shuffle the elements of the array into a random order, mutating the array.
+    """
+    var i: USize = array.size()
+    try
+      while i > 1 do
+        let ceil = i = i - 1
+        array.swap_elements(i, nextInt(ceil.u32()).usize())?
+      end
+    end
+
+class CongruentialRand
   var _x: U64
   var _next_gaussian: F64 = 0
   var _has_next_gaussian: Bool = false
