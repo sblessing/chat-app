@@ -272,7 +272,8 @@ actor Accumulator
       _actions(action) = 1
     end
 
-    if (_expected = _expected - 1) == 1 then
+    _expected = _expected - 1
+    if _expected == 0 then
       _end = Time.millis().f64()
       _duration = _end - _start
       _did_stop = true
@@ -298,16 +299,14 @@ actor Poker
   var _bench: (AsyncBenchmarkCompletion | None)
   var _last: Bool
   var _turn_series: Array[F64]
-  var _env: Env
 
-  new create(clients: U64, turns: U64, directories: Array[Directory] val, factory: BehaviorFactory, env: Env) =>
+  new create(clients: U64, turns: U64, directories: USize, befriend: U64, factory: BehaviorFactory) =>
     _actions = ActionMap
     _clients = clients
     _logouts = 0
     _confirmations = 0
     _turns = turns
     _iteration = 0
-    _directories = directories
     _runtimes = Array[Accumulator]
     _accumulations = 0
     _finals = Array[Array[F64]]
@@ -315,7 +314,19 @@ actor Poker
     _bench = None
     _last = false
     _turn_series = Array[F64]
-    _env = env
+
+    let rand = SimpleRand(42)
+
+    _directories = recover
+      let dirs = Array[Directory](directories)
+
+      for i in Range[USize](0, directories.usize()) do
+        dirs.push(Directory(rand.next(), befriend))
+      end
+
+      dirs
+    end
+
 
   be apply(bench: AsyncBenchmarkCompletion, last: Bool) =>
     _confirmations = _turns.usize()
@@ -348,14 +359,16 @@ actor Poker
     end
 
   be confirm() =>
-    if (_confirmations = _confirmations - 1 ) == 1 then
+    _confirmations = _confirmations - 1
+    if _confirmations == 0 then
       for d in _directories.values() do
         d.disconnect(this)
       end
     end
 
   be finished() =>
-    if (_logouts = _logouts - 1 ) == 1 then
+    _logouts = _logouts - 1
+    if _logouts == 0 then
       var turn: USize = 0
 
       for accumulator in _runtimes.values() do
@@ -381,7 +394,8 @@ actor Poker
       _turn_series.push(duration)
     end
 
-    if ( _accumulations = _accumulations - 1 ) == 1 then
+    _accumulations = _accumulations - 1
+    if _accumulations == 0 then
       _iteration = _iteration + 1
 
       match _bench
@@ -462,7 +476,6 @@ actor Poker
 class iso ChatApp is AsyncActorBenchmark
   var _clients: U64
   var _turns: U64
-  var _directories: Array[Directory] val
   var _factory: BehaviorFactory val
   var _poker: Poker
 
@@ -476,21 +489,10 @@ class iso ChatApp is AsyncActorBenchmark
     let leave: U64 = cmd.option("leave").u64()
     let invite: U64 = cmd.option("invite").u64()
     let befriend: U64 = cmd.option("befriend").u64()
-    let rand = SimpleRand(42)
 
     _factory = recover BehaviorFactory(compute, post, leave, invite) end
 
-    _directories = recover
-      let dirs = Array[Directory](directories)
-
-      for i in Range[USize](0, directories.usize()) do
-        dirs.push(Directory(rand.next(), befriend))
-      end
-
-      dirs
-    end
-
-    _poker = Poker(_clients, _turns, _directories, _factory, env)
+    _poker = Poker(_clients, _turns, directories, befriend, _factory)
 
   fun box apply(c: AsyncBenchmarkCompletion, last: Bool) => _poker(c, last)
 
