@@ -26,27 +26,34 @@ type Action is
 type ActionMap is MapIs[Action, U64]
 
 class val BehaviorFactory
-  let _compute: U64
-  let _post: U64
-  let _leave: U64
-  let _invite: U64
+  let _compute: U32
+  let _post: U32
+  let _leave: U32
+  let _invite: U32
 
-  new create(compute: U64, post: U64, leave: U64, invite: U64) =>
+  new create(compute: U32, post: U32, leave: U32, invite: U32) =>
     _compute = compute
     _post = post
     _leave = leave
     _invite = invite
 
   fun box apply(dice: DiceRoll): (Action | None) =>
+    let pick = dice()
     var action: (Action | None) = None
 
-    if dice(_compute) then
+    if pick < _compute then
       action = Compute
-    elseif dice(_post) then
+    end
+    
+    if pick < _post then
       action = Post
-    elseif dice(_leave) then
+    end
+
+    if pick < _leave then
       action = Leave
-    elseif dice(_invite) then
+    end
+
+    if pick < _invite then
       action = Invite
     end
 
@@ -197,10 +204,10 @@ actor Client
 actor Directory
   let _clients: ClientSeq
   let _random: SimpleRand
-  let _befriend: U64
+  let _befriend: U32
   var _poker: (Poker | None)
 
-  new create(seed: U64, befriend: U64) =>
+  new create(seed: U64, befriend: U32) =>
     _clients = ClientSeq
     _random = SimpleRand(seed)
     _befriend = befriend
@@ -208,12 +215,11 @@ actor Directory
 
   be login(id: U64) =>
     let new_client = Client(id, this, _random.next())
-    let befriend: U32 = _befriend.u32()
-
+    
     _clients.push(new_client)
 
     for client in _clients.values() do
-      if _random.nextInt(100) < befriend then
+      if _random.nextInt(100) < _befriend then
         client.befriend(new_client)
         new_client.befriend(client)
       end
@@ -300,7 +306,7 @@ actor Poker
   var _last: Bool
   var _turn_series: Array[F64]
 
-  new create(clients: U64, turns: U64, directories: USize, befriend: U64, factory: BehaviorFactory) =>
+  new create(clients: U64, turns: U64, directories: USize, befriend: U32, factory: BehaviorFactory) =>
     _actions = ActionMap
     _clients = clients
     _logouts = 0
@@ -478,64 +484,82 @@ class iso ChatApp is AsyncActorBenchmark
   var _turns: U64
   var _factory: BehaviorFactory val
   var _poker: Poker
+  var _invalid_args: Bool
 
   new iso create(env: Env, cmd: Command val) =>
     _clients = cmd.option("clients").u64()
     _turns = cmd.option("turns").u64()
+    _invalid_args = false
 
     let directories: USize = cmd.option("directories").u64().usize()
-    let compute: U64 = cmd.option("compute").u64()
-    let post: U64 = cmd.option("post").u64()
-    let leave: U64 = cmd.option("leave").u64()
-    let invite: U64 = cmd.option("invite").u64()
-    let befriend: U64 = cmd.option("befriend").u64()
+    let compute: U32 = cmd.option("compute").u64().u32()
+    let post: U32 = cmd.option("post").u64().u32()
+    let leave: U32 = cmd.option("leave").u64().u32()
+    let invite: U32 = cmd.option("invite").u64().u32()
+    let befriend: U32 = cmd.option("befriend").u64().u32()
+
+    let sum = compute + post + leave + invite
+
+    _invalid_args  =
+      if sum > 100 then
+        env.out.print("Invalid arguments! Sum of probabilities > 100.")
+        env.exitcode(-1)
+        true
+      else
+        false
+      end
 
     _factory = recover BehaviorFactory(compute, post, leave, invite) end
 
     _poker = Poker(_clients, _turns, directories, befriend, _factory)
 
-  fun box apply(c: AsyncBenchmarkCompletion, last: Bool) => _poker(c, last)
+  fun box apply(c: AsyncBenchmarkCompletion, last: Bool) => 
+    if _invalid_args == false then
+      _poker(c, last)
+    else
+      c.abort()
+    end
 
   fun tag name(): String => "Chat App"
 
-  actor Main is BenchmarkRunner
-    new create(env: Env) =>
-      try
-        let cs =
-          recover
-            CommandSpec.leaf("chat-app", "Cross Language Actor Benchmark", [
-              OptionSpec.u64("clients", "The number of clients. Defaults to 1024."
-                where short' = 'c', default' = U64(1024))
-              OptionSpec.u64("directories", "The number of directories. Defaults to 8."
-                where short' = 'd', default' = U64(8))
-              OptionSpec.u64("turns", "The number of turns. Defaults to 32."
-                where short' = 't', default' = U64(32))
-              OptionSpec.u64("compute", "The compute behavior probability. Defaults to 75."
-                where short' = 'm', default' = U64(75))
-              OptionSpec.u64("post", "The post behavior probability. Defaults to 25."
-                where short' = 'p', default' = U64(25))
-              OptionSpec.u64("leave", "The leave behavior probability. Defaults to 25."
-                where short' = 'l', default' = U64(25))
-              OptionSpec.u64("invite", "The invite behavior probability. Defaults to 25."
-                where short' = 'i', default' = U64(25))
-              OptionSpec.u64("befriend", "The befriend probability. Defaults to 10."
-                where short' = 'b', default' = U64(10))
-              OptionSpec.bool("parseable", "Generate parseable output. Defaults to false."
-                where short' = 's', default' = false)
-            ])? .> add_help()?
-          end
-
-        let result = recover val CommandParser(consume cs).parse(env.args, env.vars) end
-
-        match result
-        | let cmd: Command val => Runner(env, this, cmd)
-        | let help: CommandHelp val => help.print_help(env.out) ; env.exitcode(0)
-        | let err: SyntaxError val => env.out.print(err.string()) ; env.exitcode(1)
+actor Main is BenchmarkRunner
+  new create(env: Env) =>
+    try
+      let cs =
+        recover
+          CommandSpec.leaf("chat-app", "Cross Language Actor Benchmark", [
+            OptionSpec.u64("clients", "The number of clients. Defaults to 1024."
+              where short' = 'c', default' = U64(1024))
+            OptionSpec.u64("directories", "The number of directories. Defaults to 8."
+              where short' = 'd', default' = U64(8))
+            OptionSpec.u64("turns", "The number of turns. Defaults to 32."
+              where short' = 't', default' = U64(32))
+            OptionSpec.u64("compute", "The compute behavior probability. Defaults to 55."
+              where short' = 'm', default' = U64(55))
+            OptionSpec.u64("post", "The post behavior probability. Defaults to 25."
+              where short' = 'p', default' = U64(25))
+            OptionSpec.u64("leave", "The leave behavior probability. Defaults to 10."
+              where short' = 'l', default' = U64(10))
+            OptionSpec.u64("invite", "The invite behavior probability. Defaults to 10."
+              where short' = 'i', default' = U64(10))
+            OptionSpec.u64("befriend", "The befriend probability. Defaults to 10."
+              where short' = 'b', default' = U64(10))
+            OptionSpec.bool("parseable", "Generate parseable output. Defaults to false."
+              where short' = 's', default' = false)
+          ])? .> add_help()?
         end
-      else
-        env.exitcode(-1)
-        return
+
+      let result = recover val CommandParser(consume cs).parse(env.args, env.vars) end
+
+      match result
+      | let cmd: Command val => Runner(env, this, cmd)
+      | let help: CommandHelp val => help.print_help(env.out) ; env.exitcode(0)
+      | let err: SyntaxError val => env.out.print(err.string()) ; env.exitcode(1)
       end
+    else
+      env.exitcode(-1)
+      return
+    end
 
   fun tag benchmarks(bench: Runner, env: Env, cmd: Command val) =>
     bench(32, ChatApp(env, cmd))
