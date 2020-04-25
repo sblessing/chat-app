@@ -99,5 +99,5 @@ class DiceRoll
   new create(rand: SimpleRand) =>
     _random = rand
 
-  fun ref apply(probability: U64): Bool =>
-    _random.nextInt(100) < probability.u32()
+  fun ref apply(): U32 =>
+    _random.nextInt(100)

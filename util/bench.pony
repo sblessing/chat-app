@@ -13,6 +13,7 @@ interface tag BenchmarkRunner
 
 interface tag AsyncBenchmarkCompletion 
   be complete()
+  be abort()
   be append(s: String)
 
 class Result
@@ -160,6 +161,9 @@ actor Runner
     _running = false
     _output.report(_end - _start)
     _next()
+
+  be abort() =>
+    _running = false
 
   be apply(iterations: U64, benchmark: AsyncActorBenchmark iso) =>
     _benchmarks.push((iterations, consume benchmark))
