@@ -44,7 +44,7 @@ class val BehaviorFactory
     if pick < _compute then
       action = Compute
     end
-    
+
     if pick < _post then
       action = Post
     end
@@ -179,11 +179,10 @@ actor Client
         // Again convert the set values to an array, in order
         // to be able to use shuffle from rand
         let f = _friends.clone()
-        let s = Rand(_rand.next())
 
-        s.shuffle[Client](f)
+        _rand.shuffle[Client](f)
 
-        var invitations: USize = s.next().usize() % _friends.size()
+        var invitations: USize = _rand.next().usize() % _friends.size()
 
         if invitations == 0 then
           accumulator.stop(Invite)
@@ -215,7 +214,7 @@ actor Directory
 
   be login(id: U64) =>
     let new_client = Client(id, this, _random.next())
-    
+
     _clients.push(new_client)
 
     for client in _clients.values() do
@@ -237,7 +236,7 @@ actor Directory
       | let poker: Poker => poker.finished()
       end
     end
-    
+
   be poke(factory: BehaviorFactory, accumulator: Accumulator) =>
     for client in _clients.values() do
       client.act(factory, accumulator)
@@ -513,7 +512,7 @@ class iso ChatApp is AsyncActorBenchmark
 
     _poker = Poker(_clients, _turns, directories, befriend, _factory)
 
-  fun box apply(c: AsyncBenchmarkCompletion, last: Bool) => 
+  fun box apply(c: AsyncBenchmarkCompletion, last: Bool) =>
     if _invalid_args == false then
       _poker(c, last)
     else
