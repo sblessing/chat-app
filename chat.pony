@@ -33,9 +33,9 @@ class val BehaviorFactory
 
   new create(compute: U32, post: U32, leave: U32, invite: U32) =>
     _compute = compute
-    _post = post
-    _leave = leave
-    _invite = invite
+    _post = _compute + post
+    _leave = _post + leave
+    _invite = _leave + invite
 
   fun box apply(dice: DiceRoll): (Action | None) =>
     let pick = dice()
@@ -43,17 +43,11 @@ class val BehaviorFactory
 
     if pick < _compute then
       action = Compute
-    end
-    
-    if pick < _post then
+    elseif pick < _post then
       action = Post
-    end
-
-    if pick < _leave then
+    elseif pick < _leave then
       action = Leave
-    end
-
-    if pick < _invite then
+    elseif pick < _invite then
       action = Invite
     end
 
