@@ -1,0 +1,47 @@
+class Util usingPlatform: platform = Value ()(
+  public class SimpleRand new: seed = (
+  | private value ::= seed. |
+  )(
+    public seed = ( ^ value )
+
+    public next = (
+      ^ nextLong
+    )
+
+    public nextLong = (
+      value:: ((value * 1309) + 13849) & 65535.
+      ^ value
+    )
+
+    public nextInt: max = (
+      ^ max = 0
+          ifTrue: [ nextLong ]
+          ifFalse: [ nextLong % max ]
+    )
+
+    public shuffle: array = (
+      | i |
+      i:: array size.
+
+      [ i > 1 ] whileTrue: [
+        | ceil randI tmp |
+        ceil:: i.
+        i:: i - 1.
+        randI:: (nextInt: ceil) + 1.
+
+        tmp:: array at: ceil.
+        array at: ceil put: (array at: randI).
+        array at: randI put: tmp ]
+    )
+  )
+
+  public class DiceRoll new: rand = (
+  | private random = rand. |
+  )(
+    public seed = ( ^ random seed )
+
+    public next = (
+      ^ random nextInt: 100
+    )
+  )
+)
