@@ -495,8 +495,8 @@ class iso ChatApp is AsyncActorBenchmark
     let sum = compute + post + leave + invite
 
     _invalid_args  =
-      if sum > 100 then
-        env.out.print("Invalid arguments! Sum of probabilities > 100.")
+      if sum != 100 then
+        env.out.print("Invalid arguments! Sum of probabilities != 100.")
         env.exitcode(-1)
         true
       else
