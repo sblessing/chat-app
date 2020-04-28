@@ -1,0 +1,564 @@
+class Chat usingPlatform: platform = Value (
+| private utils       = (platform system loadModule: 'util.ns' nextTo: self) usingPlatform: platform.
+  private actors      = platform actors.
+  private system      = platform system.
+  private TransferArray = platform kernel TransferArray.
+  private TransferObject = platform kernel TransferObject.
+  private Array       = platform kernel Array.
+  (* private Dictionary  = platform collections Dictionary. *)
+  private Value       = platform kernel Value.
+  private Vector      = platform kernel Vector.
+  (* private IdentitySet = platform collections IdentitySet. *)
+
+  private DiceRoll    = utils DiceRoll.
+  private SimpleRand  = utils SimpleRand.
+
+  private BenchNoBufferedChats = false.
+|
+)(
+  class BehaviorFactory new: compute post: post leave: leave invite: invite = Value (
+  | private compute = compute.
+    private post    = self compute + post.
+    private leave   = self post + leave.
+    private invite  = self leave + invite.
+  |)(
+    public determineAction: dice = (
+      | pick = dice next. |
+      pick < compute
+        ifTrue: [ ^ #compute ].
+      pick < post
+        ifTrue: [ ^ #post ].
+      pick < leave
+        ifTrue: [ ^ #leave ].
+      pick < invite
+        ifTrue: [ ^ #invite ].
+      ^ #none
+    )
+  )
+
+  class Chat new: initiator = (
+  | members <Vector[FarReference[Client]]> = Vector new.
+    buffer  <Vector[Nil]>                  = Vector new.
+  |
+    members append: initiator.
+  )(
+    public post: payload <Array | nil> accu: accumulator = (
+      BenchNoBufferedChats
+        ifFalse: [ buffer append: payload ].
+
+      members isEmpty
+        ifTrue: [ accumulator <-: stop: #post ]
+        ifFalse: [
+          accumulator <-: bump: members size.
+          members do: [:m |
+            m <-: forward: self payload: payload accu: accumulator ] ]
+    )
+
+    public join: client accu: accumulator = (
+      members append: client.
+
+      BenchNoBufferedChats ifTrue: [
+        accumulator <-: stop: #invite.
+        ^ self ].
+
+      buffer isEmpty
+        ifTrue: [ accumulator <-: stop: #invite ]
+        ifFalse: [
+          accumulator <-: bump: buffer size.
+          buffer do: [:m |
+            client <-: forward: self payload: m accu: accumulator ] ].
+    )
+
+    public leave: client didLogout: didLogout accu: accumulator = (
+      members remove: client.
+      client <-: left: self didLogout: didLogout accu: accumulator
+    )
+  )
+
+  class Client create: id dir: directory seed: seed = (
+  | private id = id.
+    private friends <Vector[FarReference[Client]]> = Vector new.
+    private chats   <Vector[FarReference[Chat]]>   = Vector new.
+    private directory = directory.
+    private rand = SimpleRand new: seed.
+    private dice = DiceRoll new: rand.
+  |)(
+    public befriend: client <Promise[Client]> = (
+      client whenResolved: [:c | friends append: c ]
+    )
+
+    public logout = (
+      chats isEmpty
+        ifTrue: [
+          (* TODO: should I avoid using IDs, is this allowed? *)
+          directory <-: left: id.
+          ^ self ].
+
+      chats do: [:c |
+        c <-: leave: self didLogout: true accu: nil ]
+    )
+
+    public left: chat <FarReference[Chat]> didLogout: didLogout accu: accumulator = (
+      chats remove: chat.
+
+      (chats isEmpty and: [ didLogout ])
+        ifTrue: [ directory <-: left: id ]
+        ifFalse: [
+          accumulator == nil ifFalse: [
+            accumulator <-: stop: #leave ] ]
+    )
+
+    public invite: chat <FarReference[Chat]> accu: accumulator = (
+      chats append: chat.
+      chat <-: join: self accu: accumulator
+    )
+
+    public forward: chat <FarReference[Chat]> payload: payload <Array | nil> accu: accumulator = (
+      accumulator <-: stop: #post
+    )
+
+    private fibonacci: n = (
+      | j fibJ fibI |
+      n = 0 ifTrue: [ ^ 0 ].
+      n = 1 ifTrue: [ ^ 1 ].
+      j:: n / 2.
+      fibJ:: fibonacci: j.
+      fibI:: fibonacci: j - 1.
+      n % 2 = 0 ifTrue: [ ^ fibJ * (fibJ * (fibI * 2)) ].
+      n % 4 = 1
+        ifTrue:  [ ^ ((fibJ * 2) + fibI) * ((fibJ * 2) - fibI) + 2 ]
+        ifFalse: [ ^ ((fibJ * 2) + fibI) * ((fibJ * 2) - fibI) - 2 ]
+    )
+
+    public act: behavior accu: accumulator = (
+      | b index |
+      index:: rand nextInt: chats size.
+      b:: behavior determineAction: dice.
+
+      b = #post ifTrue: [
+        | chatsSize = chats size. |
+        chatsSize = 0 ifTrue: [
+          accumulator <-: stop: #none.
+          ^ self ].
+        (chats at: index) <-: post: nil accu: accumulator.
+        ^ self ].
+
+      b = #leave ifTrue: [
+        | chatsSize = chats size. |
+        chatsSize = 0 ifTrue: [
+          accumulator <-: stop: #none.
+          ^ self ].
+
+        (chats at: index) <-: leave: self didLogout: false accu: accumulator.
+        ^ self ].
+
+      b = #compute ifTrue: [
+        (* TODO: make sure this is not optimized out *)
+        fibonacci: 35.
+        accumulator <-: stop: #compute.
+        ^ self ].
+
+      b = #invite ifTrue: [
+        | createdP <Promise[Chat]> = (actors createActorFromValue: Chat) <-: new: self.
+          f i invitations |
+        createdP whenResolved: [:created |
+          chats append: created.
+          f:: friends asArray.
+
+          rand shuffle: f.
+
+          invitations:: friends size > 0
+            ifTrue: [ rand next % friends size ]
+            ifFalse: [ 0 ].
+
+          invitations = 0
+            ifTrue: [
+              accumulator <-: stop: #invite ]
+            ifFalse: [
+              accumulator <-: bump: invitations.
+              f do: [:k |
+                k <-: invite: created accu: accumulator ] ] ].
+        ^ self ].
+
+      (* else *)
+      accumulator <-: stop: #none
+    )
+  )
+
+  class Directory new: seed with: befriend = (
+  | private clients = Vector new.
+    private random = SimpleRand new: seed.
+    private befriend = befriend.
+    private completions ::= 0.
+    public poker ::= nil.
+    private numClients ::= 0.
+  |)(
+    public login: id = (
+      | newClient = (actors createActorFromValue: Client) <-: create: id dir: self seed: random next. |
+      (* Newspeak uses farrefs and promises, which we can't compare.
+         Using the id and the farref/promise seems to be easy and efficient. *)
+      clients append: {id. newClient}.
+      numClients:: numClients + 1.
+
+      clients do: [:tuple |
+        | client |
+        tuple == nil ifFalse: [
+          client:: tuple at: 2.
+          (random nextInt: 100) < befriend ifTrue: [
+            client <-: befriend: newClient.
+            newClient <-: befriend: client ] ] ].
+    )
+
+    (* Helper method *)
+    private remove: id = (
+      clients doIndexes: [:i |
+        | t |
+        t:: clients at: i.
+        t == nil ifFalse: [
+          (t at: 1) = id ifTrue: [
+            clients at: i put: nil.
+            numClients:: numClients - 1.
+            ^ true ] ] ].
+      ^ false
+    )
+
+    public left: id = (
+      remove: id.
+
+      numClients = 0 ifTrue: [
+        clients removeAll.
+        poker == nil ifFalse: [
+          poker <-: finished ]
+      ]
+    )
+
+    public poke: factory accu: accumulator = (
+      clients do: [:tuple |
+        | client |
+        tuple == nil ifFalse: [
+          client:: tuple at: 2.
+          client <-: act: factory accu: accumulator ] ]
+    )
+
+    public disconnect: p = (
+      poker:: p.
+
+      clients do: [:tuple |
+        | client |
+        tuple == nil ifFalse: [
+          client:: tuple at: 2.
+          client <-: logout ] ]
+    )
+  )
+
+  class Accumulator new: p expected: anInt turns: i = (
+  | private turn = i.
+    private actions = TransferArray new: 5 withAll: 0.
+    private poker = p.
+    private start = system ticks. (* Microseconds *)
+    private end ::= 0.
+    private duration ::= 0.
+    private expected ::= anInt.
+    private didStop ::= false.
+  |)(
+    public bump: anInt = (
+      expected:: expected + anInt - 1
+    )
+
+    private recordAction: action = (
+      action = #post    ifTrue: [ actions at: 1 put: 1 + (actions at: 1). ^ self ].
+      action = #leave   ifTrue: [ actions at: 2 put: 1 + (actions at: 2). ^ self ].
+      action = #invite  ifTrue: [ actions at: 3 put: 1 + (actions at: 3). ^ self ].
+      action = #compute ifTrue: [ actions at: 4 put: 1 + (actions at: 4). ^ self ].
+
+      actions at: 5 put: 1 + (actions at: 5)
+    )
+
+    public stop: action = (
+      recordAction: action.
+
+      expected:: expected - 1.
+      expected = 0 ifTrue: [
+        end:: system ticks.
+        duration:: end - start.
+        didStop:: true.
+
+        (* TODO replace *)
+        (* poker <-: confirm: turn duration: duration *)
+        poker <-: confirm ]
+    )
+
+    (* TODO delete *)
+    public print: poker i: i j: j = (
+      poker <-: collect: i j: j duration: duration actions: actions
+    )
+  )
+
+  class Poker clients: clients turns: numTurns directories: dirs befriend: befriend factory: factory = (
+  | private actions = Array new: 5 withAll: 0.
+    private clients = clients.
+    private logouts ::= 0.
+    private confirmations ::= 0.
+    private turns ::= numTurns.
+    private iteration ::= 1.
+    private rand = SimpleRand new: 42.
+    private directories = Array new: dirs withAll: [
+      (actors createActorFromValue: Directory) <-: new: rand next with: befriend ].
+    private runtimes ::= Vector new.
+    private accumulations ::= 0.
+    private finals = Vector new.
+    private factory = factory.
+    private bench ::= nil.
+    private last ::= false.
+    private turnSeries = Vector new.
+    (*  TODO replace
+    private turnSeries = Array new: numTurns. *)
+  |)(
+    public start: aBench isLast: isLast = (
+      confirmations:: turns.
+      logouts:: directories size.
+      bench:: aBench.
+      last:: isLast.
+      accumulations:: 0.
+
+      finals append: (Array new: turns withAll: 0.0).
+
+      0 to: clients - 1 do: [:clientId |
+        | index |
+        index:: (clientId % directories size) + 1.
+
+        (directories at: index) <-: login: clientId ].
+
+      1 to: turns do: [:i |
+        | accumulator = (actors createActorFromValue: Accumulator) <-: new: self expected: clients turns: i. |
+        directories do: [:d |
+          d <-: poke: factory accu: accumulator ].
+
+        runtimes append: accumulator ].
+    )
+
+    (* TODO replace
+    public confirm: turn duration: duration = (
+      (turnSeries at: turn) == nil
+        ifTrue: [ ('Error turn ' + turn + ' already has value:' + duration) println ].
+      turnSeries at: turn put: duration.*)
+
+    public confirm = (
+      confirmations:: confirmations - 1.
+      confirmations = 0 ifTrue: [
+        directories do: [:d |
+          d <-: disconnect: self ] ]
+    )
+
+    public finished = (
+      logouts:: logouts - 1.
+      logouts = 0 ifTrue: [
+        | turn ::= 1. |
+        runtimes do: [:accumulator |
+          accumulations:: accumulations + 1.
+          accumulator <-: print: self i: iteration j: turn.
+          turn:: turn + 1 ].
+
+        runtimes:: Vector new ]
+    )
+
+    public collect: i j: j duration: duration actions: actionArr <TransferArray> = (
+      1 to: 5 do: [:i |
+        actions at: i put: (actions at: i) + (actionArr at: i) ].
+
+
+      (finals at: i) at: j put: duration.
+      turnSeries append: duration.
+
+      accumulations:: accumulations - 1.
+      accumulations = 0 ifTrue: [
+        iteration:: iteration + 1.
+
+        bench <-: complete.
+
+        (* last ifTrue: [
+          finals doIndexes: [:i |
+            | turns |
+            turns:: finals at: i.
+            ].
+           ] *)
+
+      '\n\n' println.
+       ('#post:    ' + (actions at: 1)) println.
+       ('#leave:   ' + (actions at: 2)) println.
+       ('#invite:  ' + (actions at: 3)) println.
+       ('#compute: ' + (actions at: 4)) println.
+       ('#none:    ' + (actions at: 5)) println. ]
+    )
+  )
+
+  public class Config new: args = TransferObject (
+  | private args = args.
+    public clients  ::= 1024.
+    public numDirs  ::= 8.
+    public turns    ::= 32.
+    public compute  ::= 55.
+    public post     ::= 25.
+    public leave    ::= 10.
+    public invite   ::= 10.
+    public befriend ::= 10.
+
+    public parseable ::= false.
+  |
+    readConfig
+  )(
+    private readConfig = (
+      | i sum |
+      i:: 1.
+
+      [ i <= args size ] whileTrue: [
+        | arg |
+        arg:: args at: i.
+        arg = '-c' ifTrue: [ clients::   (args at: i + 1) asInteger. i:: i + 1 ].
+        arg = '-d' ifTrue: [ numDirs::   (args at: i + 1) asInteger. i:: i + 1 ].
+        arg = '-t' ifTrue: [ turns::     (args at: i + 1) asInteger. i:: i + 1 ].
+        arg = '-m' ifTrue: [ compute::   (args at: i + 1) asInteger. i:: i + 1 ].
+        arg = '-p' ifTrue: [ post::      (args at: i + 1) asInteger. i:: i + 1 ].
+        arg = '-l' ifTrue: [ leave::     (args at: i + 1) asInteger. i:: i + 1 ].
+        arg = '-i' ifTrue: [ invite::    (args at: i + 1) asInteger. i:: i + 1 ].
+        arg = '-b' ifTrue: [ befriend::  (args at: i + 1) asInteger. i:: i + 1 ].
+        arg = '-parse' ifTrue: [ parseable:: true ].
+
+        i:: i + 1 ].
+
+      sum:: compute + post + leave + invite.
+      sum <> 100 ifTrue: [
+        'Invalid arguments! Sum of probabilities != 100.' print.
+        ' It is: ' print. sum println.
+        system exit: 1 ].
+    )
+
+    public print = (
+      'Configuration ChatApp Benchmark' println.
+      '\tclients:     ' print. clients println.
+      '\tdirectories: ' print. numDirs println.
+      '\tturns:       ' print. turns println.
+      '\tcompute:     ' print. compute println.
+      '\tpost:        ' print. post println.
+      '\tleave:       ' print. leave println.
+      '\tinvite:      ' print. invite println.
+      '\tbefriend:    ' print. befriend println.
+      '\tparseable:   ' print. parseable println.
+    )
+  )
+
+  class ChatApp new: cfg = (
+  | private clients = cfg clients.
+    private factory = BehaviorFactory new: cfg compute
+                          post: cfg post leave: cfg leave invite: cfg invite.
+    private poker =
+      (actors createActorFromValue: Poker)
+        <-: clients: clients turns: cfg turns directories: cfg numDirs
+           befriend: cfg befriend factory: factory.
+  |
+  )(
+    public run: benchmark isLast: last = (
+      poker <-: start: benchmark isLast: last
+    )
+  )
+
+  class Result new: name parseable: aBool = (
+  | private benchmark = name.
+    private parseable = aBool.
+    private samples = Vector new.
+  |)(
+    public record: micro = (
+      samples append: micro
+    )
+
+    public asString = (
+      notYetImplemented
+    )
+  )
+
+  class OutputManager new: parseable = (
+  | private parseable = parseable.
+    private result = Result new: 'AsyncActorBenchmark' parseable: parseable.
+  |)(
+    public report: micro = (
+      result record: micro
+    )
+
+    public summarize = (
+      result println
+    )
+  )
+
+  class Runner new: cfg = (
+  | private configuration = cfg.
+    private benchmark
+    private output = OutputManager new: cfg parseable.
+
+    private iterations
+
+    private running ::= false.
+    private summarize ::= false.
+    private startTime ::= 0.
+    private endTime ::= 0.
+
+    private completionR
+  |)(
+    public start: iter = (
+      | pp |
+      pp:: actors createPromisePair.
+      completionR:: pp resolver.
+
+      benchmark:: ChatApp new: configuration.
+      iterations:: iter.
+      next.
+      ^ pp promise
+    )
+
+    private next = (
+      running ifTrue: [ ^ self ].
+
+      summarize ifTrue: [
+        (*'Runner.summarize' println.
+        output summarize.*)
+        summarize:: false ].
+
+      iterations > 0
+        ifTrue: [
+          running:: true.
+
+          startTime:: system ticks.
+
+          'Runner.run: ' print. iterations println.
+
+          benchmark run: self isLast: iterations = 1.
+          iterations:: iterations - 1.
+          summarize:: iterations = 0 ]
+        ifFalse: [
+          completionR resolve: 0 ]
+    )
+
+    public complete = (
+      endTime:: system ticks.
+      running:: false.
+      output report: endTime - startTime.
+      ('Total: ' + (endTime - startTime) + 'us') println.
+      next.
+    )
+  )
+
+  public main: args = (
+    | cfg runner simpleRand dice |
+    (*simpleRand:: SimpleRand new: 42.
+    dice:: DiceRoll new: simpleRand.
+
+    0 to: 2000000 do: [:i |
+      (' seed: ' + dice seed + ' bool: ' + (dice next: 50)) println ].
+
+    system exit: 0.*)
+
+    cfg:: Config new: args.
+    cfg print.
+    runner:: (actors createActorFromValue: Runner) <-: new: cfg.
+    ^ (runner <-: start: 32)
+  )
+)
