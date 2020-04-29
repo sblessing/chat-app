@@ -13,7 +13,14 @@
 #include "caf/io/middleman.hpp"
 
 /// clients actions
-enum class action : uint8_t { post, leave, invite, compute, none };
+enum class action : uint8_t {
+  post,
+  post_delivery,
+  leave,
+  invite,
+  compute,
+  none
+};
 
 namespace std {
 
@@ -223,7 +230,7 @@ caf::behavior client(caf::stateful_actor<client_state>* self, const uint64_t id,
     },
     [=](forward_atom, const caf::actor&, const payload&,
         const caf::actor& accumulator) {
-      self->send(accumulator, stop_atom::value, action::post);
+      self->send(accumulator, stop_atom::value, action::post_delivery);
     },
     [=](act_atom, behavior_factory& behavior, const caf::actor& accumulator) {
       auto& s = self->state;
@@ -502,6 +509,8 @@ poker(caf::stateful_actor<poker_state>* self, uint64_t clients, uint64_t turns,
                      << "Leave: " << s.actions[action::leave] << std::endl
                      << "Invite: " << s.actions[action::invite] << std::endl
                      << "Compute: " << s.actions[action::compute] << std::endl
+                     << "Post Delivery: " << s.actions[action::post_delivery]
+                     << std::endl
                      << "None: " << s.actions[action::none] << std::endl;
 
             self->send(s.bench, append_atom::value, title_text.str(),
