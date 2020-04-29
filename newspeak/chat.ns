@@ -114,7 +114,7 @@ class Chat usingPlatform: platform = Value (
     )
 
     public forward: chat <FarReference[Chat]> payload: payload <Array | nil> accu: accumulator = (
-      accumulator <-: stop: #post
+      accumulator <-: stop: #postDelivery
     )
 
     private fibonacci: n = (
@@ -253,7 +253,7 @@ class Chat usingPlatform: platform = Value (
 
   class Accumulator new: p expected: anInt turns: i = (
   | private turn = i.
-    private actions = TransferArray new: 5 withAll: 0.
+    private actions = TransferArray new: 6 withAll: 0.
     private poker = p.
     private start = system ticks. (* Microseconds *)
     private end ::= 0.
@@ -266,12 +266,13 @@ class Chat usingPlatform: platform = Value (
     )
 
     private recordAction: action = (
-      action = #post    ifTrue: [ actions at: 1 put: 1 + (actions at: 1). ^ self ].
-      action = #leave   ifTrue: [ actions at: 2 put: 1 + (actions at: 2). ^ self ].
-      action = #invite  ifTrue: [ actions at: 3 put: 1 + (actions at: 3). ^ self ].
-      action = #compute ifTrue: [ actions at: 4 put: 1 + (actions at: 4). ^ self ].
+      action = #post         ifTrue: [ actions at: 1 put: 1 + (actions at: 1). ^ self ].
+      action = #postDelivery ifTrue: [ actions at: 2 put: 1 + (actions at: 2). ^ self ].
+      action = #leave        ifTrue: [ actions at: 3 put: 1 + (actions at: 3). ^ self ].
+      action = #invite       ifTrue: [ actions at: 4 put: 1 + (actions at: 4). ^ self ].
+      action = #compute      ifTrue: [ actions at: 5 put: 1 + (actions at: 5). ^ self ].
 
-      actions at: 5 put: 1 + (actions at: 5)
+      actions at: 6 put: 1 + (actions at: 6)
     )
 
     public stop: action = (
@@ -295,7 +296,7 @@ class Chat usingPlatform: platform = Value (
   )
 
   class Poker clients: clients turns: numTurns directories: dirs befriend: befriend factory: factory = (
-  | private actions = Array new: 5 withAll: 0.
+  | private actions = Array new: 6 withAll: 0.
     private clients = clients.
     private logouts ::= 0.
     private confirmations ::= 0.
@@ -385,10 +386,11 @@ class Chat usingPlatform: platform = Value (
 
       '\n\n' println.
        ('#post:    ' + (actions at: 1)) println.
-       ('#leave:   ' + (actions at: 2)) println.
-       ('#invite:  ' + (actions at: 3)) println.
-       ('#compute: ' + (actions at: 4)) println.
-       ('#none:    ' + (actions at: 5)) println. ]
+       ('#postDel: ' + (actions at: 2)) println.
+       ('#leave:   ' + (actions at: 3)) println.
+       ('#invite:  ' + (actions at: 4)) println.
+       ('#compute: ' + (actions at: 5)) println.
+       ('#none:    ' + (actions at: 6)) println. ]
     )
   )
 
