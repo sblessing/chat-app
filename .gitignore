@@ -1,5 +1,7 @@
 chat-app.dSYM
 chat-app
+pony
+pony.exe
 *.exe
 *.exp
 *.ilk

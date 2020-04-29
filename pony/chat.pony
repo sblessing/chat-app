@@ -11,12 +11,14 @@ type ClientSeq is Array[Client]
 type ChatSeq is Array[Chat]
 
 primitive Post
+primitive PostDelivery
 primitive Leave
 primitive Invite
 primitive Compute
 
 type Action is
   ( Post
+  | PostDelivery
   | Leave
   | Invite
   | Compute
@@ -155,7 +157,7 @@ actor Client
     chat.join(this, accumulator)
 
   be forward(chat: Chat, payload: (Array[U8] val | None), accumulator: Accumulator) =>
-    accumulator.stop(Post)
+    accumulator.stop(PostDelivery)
 
   be act(behavior: BehaviorFactory, accumulator: Accumulator) =>
     let index = _rand.nextInt(_chats.size().u32()).usize()
@@ -454,16 +456,17 @@ actor Poker
             // could make 'Actions' stringable
             let identifier =
               match key
-              | Post    => "Post"
-              | Leave   => "Leave"
-              | Invite  => "Invite"
-              | Compute => "Compute"
-              | None    => "None"
+              | Post         => "Post"
+              | PostDelivery => "PostDelivery"
+              | Leave        => "Leave"
+              | Invite       => "Invite"
+              | Compute      => "Compute"
+              | None         => "None"
               end
 
             bench.append(
               "".join([
-                  Format(identifier where width = 8)
+                  Format(identifier where width = 16)
                   Format(value.string() where width = 10, align = AlignRight)
                 ].values()
               )
