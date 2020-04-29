@@ -407,7 +407,7 @@ class Chat usingPlatform: platform = Value (
         arg = '-p' ifTrue: [ post::      (args at: i + 1) asInteger. i:: i + 1 ].
         arg = '-l' ifTrue: [ leave::     (args at: i + 1) asInteger. i:: i + 1 ].
         arg = '-i' ifTrue: [ invite::    (args at: i + 1) asInteger. i:: i + 1 ].
-        arg = '-b' ifTrue: [ befriend::  (args at: i + 1) asInteger. i:: i + 1 ].
+        arg = '-be' ifTrue: [ befriend::  (args at: i + 1) asInteger. i:: i + 1 ].
         arg = '-parse' ifTrue: [ parseable:: true ].
 
         i:: i + 1 ].
