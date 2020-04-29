@@ -412,6 +412,14 @@ class Chat usingPlatform: platform = Value (
 
         i:: i + 1 ].
 
+      numDirs > clients ifTrue: [
+        ('Invalid arguments! Cannot have more directories (' + numDirs + ') than clients ('+ clients +')') println.
+        system exit: 1 ].
+
+      clients < (numDirs * 2) ifTrue: [
+        ('Invalid arguments! Need to have 2x as many dictionaries (' + numDirs + ') so that clients ('+ clients +') have at least 1 friend') println.
+        system exit: 1 ].
+
       sum:: compute + post + leave + invite.
       sum <> 100 ifTrue: [
         'Invalid arguments! Sum of probabilities != 100.' print.
