@@ -132,7 +132,7 @@ class Chat usingPlatform: platform = Value (
 
     public act: behavior accu: accumulator = (
       | b index |
-      index:: rand nextInt: chats size.
+      index:: (rand nextInt: chats size) + 1.
       b:: behavior determineAction: dice.
 
       b = #post ifTrue: [
