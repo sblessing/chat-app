@@ -65,6 +65,7 @@ using apply_atom = caf::atom_constant<caf::atom("apply")>;
 using complete_atom = caf::atom_constant<caf::atom("complete")>;
 using append_atom = caf::atom_constant<caf::atom("append")>;
 using quit_atom = caf::atom_constant<caf::atom("quit")>;
+using accepted_atom = caf::atom_constant<caf::atom("accepted")>;
 
 /// simulates extern client events for each turn
 struct behavior_factory {
@@ -145,7 +146,8 @@ chat(caf::stateful_actor<chat_state>* self, const caf::actor initiator) {
       if (s.members.empty()) {
         self->send(accumulator, stop_atom::value, action::post);
       } else {
-        self->send(accumulator, bump_atom::value, action::post, s.members.size());
+        self->send(accumulator, bump_atom::value, action::post,
+                   s.members.size());
         auto msg = caf::make_message(forward_atom::value, self, std::move(pl),
                                      accumulator);
         for (auto& member : s.members)
@@ -153,15 +155,13 @@ chat(caf::stateful_actor<chat_state>* self, const caf::actor initiator) {
       }
     },
     [=](join_atom, const caf::actor& client, const caf::actor& accumulator) {
+      self->send(client, accepted_atom::value, self, accumulator);
       auto& s = self->state;
       s.members.emplace_back(client);
-#ifdef BENCH_NO_BUFFERED_CHATS
-      self->send(accumulator, stop_atom::value, action::ignore);
-#else
-      if (s.buffer.empty()) {
-        self->send(accumulator, stop_atom::value, action::ignore);
-      } else {
-        self->send(accumulator, bump_atom::value, action::ignore, s.buffer.size());
+#ifndef BENCH_NO_BUFFERED_CHATS
+      if (!s.buffer.empty()) {
+        self->send(accumulator, bump_atom::value, action::ignore,
+                   s.buffer.size());
         for (auto& message : s.buffer)
           self->send(client, forward_atom::value, self, message, accumulator);
       }
@@ -225,9 +225,9 @@ caf::behavior client(caf::stateful_actor<client_state>* self, const uint64_t id,
         self->send(accumulator, stop_atom::value, action::leave);
       }
     },
-    [=](invite_atom, const caf::actor& chat, const caf::actor& accumulator) {
+    [=](accepted_atom, const caf::actor& chat, const caf::actor& accumulator) {
       self->state.chats.emplace_back(chat);
-      self->send(chat, join_atom::value, self, accumulator);
+      self->send(accumulator, stop_atom::value, action::ignore);
     },
     [=](forward_atom, const caf::actor&, const payload&,
         const caf::actor& accumulator) {
@@ -268,9 +268,10 @@ caf::behavior client(caf::stateful_actor<client_state>* self, const uint64_t id,
           if (invitations == 0) {
             invitations = 1;
           }
-          self->send(accumulator, bump_atom::value, action::invite, invitations);
+          self->send(accumulator, bump_atom::value, action::invite,
+                     invitations);
           for (size_t i = 0; i < invitations; ++i)
-            self->send(f[i], invite_atom::value, created, accumulator);
+            self->send(created, join_atom::value, f[i], accumulator);
           break;
         }
         default: // case action::none:
@@ -298,7 +299,8 @@ caf::behavior directory(caf::stateful_actor<directory_state>* self,
   return {
     [=](login_atom, uint64_t id) {
       auto& s = self->state;
-      s.clients.emplace_back(self->spawn(client, id, self, s.random.next_long()));
+      s.clients.emplace_back(
+        self->spawn(client, id, self, s.random.next_long()));
     },
     [=](befriend_atom) {
       auto& s = self->state;
