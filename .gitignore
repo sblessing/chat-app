@@ -7,3 +7,5 @@ pony.exe
 *.ilk
 *.lib
 *.pdb
+*/build/
+.idea/
