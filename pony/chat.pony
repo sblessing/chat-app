@@ -90,7 +90,7 @@ actor Chat
   be join(client: Client, accumulator: Accumulator) =>
     _members.push(client)
 
-    ifdef not "_BENCH_NO_BUFFERED_CHATS" then
+    ifdef "_BENCH_NO_BUFFERED_CHATS" then
        accumulator.stop(Ignore)
     else
       if _buffer.size() > 0 then
