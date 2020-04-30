@@ -155,7 +155,6 @@ chat(caf::stateful_actor<chat_state>* self, const caf::actor initiator) {
       }
     },
     [=](join_atom, const caf::actor& client, const caf::actor& accumulator) {
-      self->send(client, accepted_atom::value, self, accumulator);
       auto& s = self->state;
       s.members.emplace_back(client);
 #ifndef BENCH_NO_BUFFERED_CHATS
@@ -166,6 +165,7 @@ chat(caf::stateful_actor<chat_state>* self, const caf::actor initiator) {
           self->send(client, forward_atom::value, self, message, accumulator);
       }
 #endif
+      self->send(client, accepted_atom::value, self, accumulator);
     },
     [=](leave_atom, const caf::actor& client, const bool did_logout,
         const caf::actor& accumulator) {
