@@ -88,19 +88,17 @@ actor Chat
     end
 
   be join(client: Client, accumulator: Accumulator) =>
+    client.accepted(this, accumulator)
+
     _members.push(client)
 
-    ifdef "_BENCH_NO_BUFFERED_CHATS" then
-       accumulator.stop(Ignore)
-    else
+    ifdef not "_BENCH_NO_BUFFERED_CHATS" then
       if _buffer.size() > 0 then
         accumulator.bump(Ignore, _buffer.size())
 
         for message in _buffer.values() do
           client.forward(this, message, accumulator)
         end
-      else
-        accumulator.stop(Ignore)
       end
     end
 
@@ -154,9 +152,9 @@ actor Client
       end
     end
 
-  be invite(chat: Chat, accumulator: Accumulator) =>
+  be accepted(chat: Chat, accumulator: Accumulator) =>
     _chats.push(chat)
-    chat.join(this, accumulator)
+    accumulator.stop(Ignore)
 
   be forward(chat: Chat, payload: (Array[U8] val | None), accumulator: Accumulator) =>
     accumulator.stop(PostDelivery)
@@ -188,7 +186,7 @@ actor Client
         accumulator.bump(Invite, invitations)
   
         for k in Range[USize](0, invitations) do
-          try f(k)?.invite(created, accumulator) end
+          try created.join(f(k)?, accumulator) end
         end
       else
         accumulator.stop(None)
