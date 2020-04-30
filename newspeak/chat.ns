@@ -58,15 +58,12 @@ class Chat usingPlatform: platform = Value (
       members append: client.
 
       BenchNoBufferedChats ifFalse: [
-        accumulator <-: stop: #ignore.
-        ^ self ].
-
-      buffer isEmpty
-        ifTrue: [ accumulator <-: stop: #ignore ]
-        ifFalse: [
+        buffer size > 0 ifTrue: [
           accumulator <-: bump: buffer size act: #ignore.
           buffer do: [:m |
-            client <-: forward: self payload: m accu: accumulator ] ].
+            client <-: forward: self payload: m accu: accumulator ] ] ].
+
+      client <-: accept: self accu: accumulator.
     )
 
     public leave: client didLogout: didLogout accu: accumulator = (
@@ -108,9 +105,9 @@ class Chat usingPlatform: platform = Value (
             accumulator <-: stop: #leave ] ]
     )
 
-    public invite: chat <FarReference[Chat]> accu: accumulator = (
+    public accept: chat <FarReference[Chat]> accu: accumulator = (
       chats append: chat.
-      chat <-: join: self accu: accumulator
+      accumulator <-: stop: #ignore
     )
 
     public forward: chat <FarReference[Chat]> payload: payload <Array | nil> accu: accumulator = (
@@ -172,10 +169,10 @@ class Chat usingPlatform: platform = Value (
         accumulator <-: bump: invitations act: #invite.
 
         createdP whenResolved: [:created |
-          chats append: created.
+          chats append: created ].
 
-          f do: [:k |
-            k <-: invite: created accu: accumulator ] ].
+        f do: [:k |
+          createdP <-: join: k accu: accumulator ].
         ^ self ].
 
       (* else *)
