@@ -15,6 +15,7 @@ primitive PostDelivery
 primitive Leave
 primitive Invite
 primitive Compute
+primitive Ignore
 
 type Action is
   ( Post
@@ -22,6 +23,7 @@ type Action is
   | Leave
   | Invite
   | Compute
+  | Ignore
   | None
   )
 
@@ -74,9 +76,9 @@ actor Chat
 
     if _members.size() > 0 then
       // In distributed settings, which are not Pony,
-      // there is race between bump and forward. Take
+      // there is a race between bump and forward. Take
       // care!
-      accumulator.bump(_members.size())
+      accumulator.bump(Post, _members.size())
 
       for member in _members.values() do
         member.forward(this, payload, accumulator)
@@ -88,17 +90,17 @@ actor Chat
   be join(client: Client, accumulator: Accumulator) =>
     _members.push(client)
 
-    ifdef "_BENCH_NO_BUFFERED_CHATS" then
-       accumulator.stop(Invite)
+    ifdef not "_BENCH_NO_BUFFERED_CHATS" then
+       accumulator.stop(Ignore)
     else
       if _buffer.size() > 0 then
-        accumulator.bump(_buffer.size())
+        accumulator.bump(Ignore, _buffer.size())
 
         for message in _buffer.values() do
           client.forward(this, message, accumulator)
         end
       else
-        accumulator.stop(Invite)
+        accumulator.stop(Ignore)
       end
     end
 
@@ -175,26 +177,24 @@ actor Client
         // Again convert the set values to an array, in order
         // to be able to use shuffle from rand
         let f = _friends.clone()
-        let s = Rand(_rand.next())
+        _rand.shuffle[Client](f)
 
-        s.shuffle[Client](f)
-
-        var invitations: USize = s.next().usize() % _friends.size()
+        var invitations: USize = _rand.nextInt(_friends.size().u32()).usize()
 
         if invitations == 0 then
-          accumulator.stop(Invite)
-        else
-          accumulator.bump(invitations)
-
-          for k in Range[USize](0, invitations) do
-            try f(k)?.invite(created, accumulator) end
-          end
+          invitations = 1
+        end
+        
+        accumulator.bump(Invite, invitations)
+  
+        for k in Range[USize](0, invitations) do
+          try f(k)?.invite(created, accumulator) end
         end
       else
-        accumulator.stop()
+        accumulator.stop(None)
       end
     else
-      accumulator.stop()
+      accumulator.stop(None)
     end
 
 actor Directory
@@ -203,21 +203,22 @@ actor Directory
   let _befriend: U32
   var _poker: (Poker | None)
 
-  new create(seed: U64, befriend: U32) =>
+  new create(seed: U64, befriend': U32) =>
     _clients = ClientSeq
     _random = SimpleRand(seed)
-    _befriend = befriend
+    _befriend = befriend'
     _poker = None
 
   be login(id: U64) =>
-    let new_client = Client(id, this, _random.next())
-    
-    _clients.push(new_client)
+    _clients.push(Client(id, this, _random.next()))
 
-    for client in _clients.values() do
-      if _random.nextInt(100) < _befriend then
-        client.befriend(new_client)
-        new_client.befriend(client)
+  be befriend() =>
+    for friend in _clients.values() do
+      for client in _clients.values() do
+        if (_random.nextInt(100) < _befriend) and (friend isnt client) then
+          client.befriend(friend)
+          friend.befriend(client)
+        end
       end
     end
 
@@ -264,17 +265,21 @@ actor Accumulator
     _expected = expected
     _did_stop = false
 
-  be bump(expected: USize) =>
-    _expected = ( _expected + expected ) - 1
-
-  be stop(action: Action = None) =>
+  fun ref _count(action: Action) =>
     try
       _actions(action) = _actions(action)? + 1
     else
       _actions(action) = 1
     end
 
+  be bump(action: Action, expected: USize) =>
+    _count(action)
+    _expected = ( _expected + expected ) - 1
+
+  be stop(action: Action = Ignore) =>
+    _count(action)
     _expected = _expected - 1
+
     if _expected == 0 then
       _end = Time.millis().f64()
       _duration = _end - _start
@@ -348,6 +353,11 @@ actor Poker
         index = client.usize() % _directories.size()
         _directories(index)?.login(client)
       end
+    end
+
+    // To make sure that nobody's friendset is empty
+    for directory in _directories.values() do
+      directory.befriend()
     end
 
     while ( turns = turns - 1 ) >= 1 do
@@ -461,6 +471,7 @@ actor Poker
               | Leave        => "Leave"
               | Invite       => "Invite"
               | Compute      => "Compute"
+              | Ignore       => "Ignore"
               | None         => "None"
               end
 
