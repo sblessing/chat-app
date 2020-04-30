@@ -49,7 +49,7 @@ class Chat usingPlatform: platform = Value (
       members isEmpty
         ifTrue: [ accumulator <-: stop: #post ]
         ifFalse: [
-          accumulator <-: bump: members size.
+          accumulator <-: bump: members size act: #post.
           members do: [:m |
             m <-: forward: self payload: payload accu: accumulator ] ]
     )
@@ -57,14 +57,14 @@ class Chat usingPlatform: platform = Value (
     public join: client accu: accumulator = (
       members append: client.
 
-      BenchNoBufferedChats ifTrue: [
-        accumulator <-: stop: #invite.
+      BenchNoBufferedChats ifFalse: [
+        accumulator <-: stop: #ignore.
         ^ self ].
 
       buffer isEmpty
-        ifTrue: [ accumulator <-: stop: #invite ]
+        ifTrue: [ accumulator <-: stop: #ignore ]
         ifFalse: [
-          accumulator <-: bump: buffer size.
+          accumulator <-: bump: buffer size act: #ignore.
           buffer do: [:m |
             client <-: forward: self payload: m accu: accumulator ] ].
     )
@@ -83,15 +83,15 @@ class Chat usingPlatform: platform = Value (
     private rand = SimpleRand new: seed.
     private dice = DiceRoll new: rand.
   |)(
-    public befriend: client <Promise[Client]> = (
-      client whenResolved: [:c | friends append: c ]
+    public befriend: client <FarReference[Client]> = (
+      friends append: client
     )
 
     public logout = (
       chats isEmpty
         ifTrue: [
           (* TODO: should I avoid using IDs, is this allowed? *)
-          directory <-: left: id.
+          directory <-: left: self.
           ^ self ].
 
       chats do: [:c |
@@ -102,7 +102,7 @@ class Chat usingPlatform: platform = Value (
       chats remove: chat.
 
       (chats isEmpty and: [ didLogout ])
-        ifTrue: [ directory <-: left: id ]
+        ifTrue: [ directory <-: left: self ]
         ifFalse: [
           accumulator == nil ifFalse: [
             accumulator <-: stop: #leave ] ]
@@ -161,23 +161,21 @@ class Chat usingPlatform: platform = Value (
       b = #invite ifTrue: [
         | createdP <Promise[Chat]> = (actors createActorFromValue: Chat) <-: new: self.
           f i invitations |
+        f:: friends asArray.
+
+        rand shuffle: f.
+
+        invitations:: friends size > 0
+          ifTrue: [ rand next % friends size ]
+          ifFalse: [ 1 ].
+
+        accumulator <-: bump: invitations act: #invite.
+
         createdP whenResolved: [:created |
           chats append: created.
-          f:: friends asArray.
 
-          rand shuffle: f.
-
-          invitations:: friends size > 0
-            ifTrue: [ rand next % friends size ]
-            ifFalse: [ 0 ].
-
-          invitations = 0
-            ifTrue: [
-              accumulator <-: stop: #invite ]
-            ifFalse: [
-              accumulator <-: bump: invitations.
-              f do: [:k |
-                k <-: invite: created accu: accumulator ] ] ].
+          f do: [:k |
+            k <-: invite: created accu: accumulator ] ].
         ^ self ].
 
       (* else *)
@@ -186,46 +184,31 @@ class Chat usingPlatform: platform = Value (
   )
 
   class Directory new: seed with: befriend = (
-  | private clients = Vector new.
+  | private clients <Vector[FarReference[Client]]> = Vector new.
     private random = SimpleRand new: seed.
-    private befriend = befriend.
+    private numBefriends = befriend.
     private completions ::= 0.
     public poker ::= nil.
-    private numClients ::= 0.
   |)(
     public login: id = (
       | newClient = (actors createActorFromValue: Client) <-: create: id dir: self seed: random next. |
-      (* Newspeak uses farrefs and promises, which we can't compare.
-         Using the id and the farref/promise seems to be easy and efficient. *)
-      clients append: {id. newClient}.
-      numClients:: numClients + 1.
-
-      clients do: [:tuple |
-        | client |
-        tuple == nil ifFalse: [
-          client:: tuple at: 2.
-          (random nextInt: 100) < befriend ifTrue: [
-            client <-: befriend: newClient.
-            newClient <-: befriend: client ] ] ].
+      ^ newClient whenResolved: [:nc |
+        clients append: nc ]
     )
 
-    (* Helper method *)
-    private remove: id = (
-      clients doIndexes: [:i |
-        | t |
-        t:: clients at: i.
-        t == nil ifFalse: [
-          (t at: 1) = id ifTrue: [
-            clients at: i put: nil.
-            numClients:: numClients - 1.
-            ^ true ] ] ].
-      ^ false
+    public befriend = (
+      clients do: [:friend |
+        clients do: [:client |
+          ((random nextInt: 100) < numBefriends and: [friend ~= client])
+            ifTrue: [
+              client <-: befriend: friend.
+              friend <-: befriend: client ] ] ]
     )
 
-    public left: id = (
-      remove: id.
+    public left: client <FarReference[Client]> = (
+      clients remove: client.
 
-      numClients = 0 ifTrue: [
+      clients isEmpty ifTrue: [
         clients removeAll.
         poker == nil ifFalse: [
           poker <-: finished ]
@@ -233,27 +216,21 @@ class Chat usingPlatform: platform = Value (
     )
 
     public poke: factory accu: accumulator = (
-      clients do: [:tuple |
-        | client |
-        tuple == nil ifFalse: [
-          client:: tuple at: 2.
-          client <-: act: factory accu: accumulator ] ]
+      clients do: [:client |
+        client <-: act: factory accu: accumulator ]
     )
 
     public disconnect: p = (
       poker:: p.
 
-      clients do: [:tuple |
-        | client |
-        tuple == nil ifFalse: [
-          client:: tuple at: 2.
-          client <-: logout ] ]
+      clients do: [:client |
+        client <-: logout ]
     )
   )
 
   class Accumulator new: p expected: anInt turns: i = (
   | private turn = i.
-    private actions = TransferArray new: 6 withAll: 0.
+    private actions = TransferArray new: 7 withAll: 0.
     private poker = p.
     private start = system ticks. (* Microseconds *)
     private end ::= 0.
@@ -261,7 +238,8 @@ class Chat usingPlatform: platform = Value (
     private expected ::= anInt.
     private didStop ::= false.
   |)(
-    public bump: anInt = (
+    public bump: anInt act: action = (
+      recordAction: action.
       expected:: expected + anInt - 1
     )
 
@@ -271,8 +249,9 @@ class Chat usingPlatform: platform = Value (
       action = #leave        ifTrue: [ actions at: 3 put: 1 + (actions at: 3). ^ self ].
       action = #invite       ifTrue: [ actions at: 4 put: 1 + (actions at: 4). ^ self ].
       action = #compute      ifTrue: [ actions at: 5 put: 1 + (actions at: 5). ^ self ].
+      action = #ignore       ifTrue: [ actions at: 6 put: 1 + (actions at: 6). ^ self ].
 
-      actions at: 6 put: 1 + (actions at: 6)
+      actions at: 7 put: 1 + (actions at: 7)
     )
 
     public stop: action = (
@@ -296,7 +275,7 @@ class Chat usingPlatform: platform = Value (
   )
 
   class Poker clients: clients turns: numTurns directories: dirs befriend: befriend factory: factory = (
-  | private actions = Array new: 6 withAll: 0.
+  | private actions = Array new: 7 withAll: 0.
     private clients = clients.
     private logouts ::= 0.
     private confirmations ::= 0.
@@ -329,6 +308,9 @@ class Chat usingPlatform: platform = Value (
         index:: (clientId % directories size) + 1.
 
         (directories at: index) <-: login: clientId ].
+
+      directories do: [:directory |
+        directory <-: befriend ].
 
       1 to: turns do: [:i |
         | accumulator = (actors createActorFromValue: Accumulator) <-: new: self expected: clients turns: i. |
@@ -390,7 +372,8 @@ class Chat usingPlatform: platform = Value (
        ('#leave:   ' + (actions at: 3)) println.
        ('#invite:  ' + (actions at: 4)) println.
        ('#compute: ' + (actions at: 5)) println.
-       ('#none:    ' + (actions at: 6)) println. ]
+       ('#ignore:  ' + (actions at: 6)) println.
+       ('#none:    ' + (actions at: 7)) println. ]
     )
   )
 
