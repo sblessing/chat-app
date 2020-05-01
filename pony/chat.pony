@@ -88,8 +88,6 @@ actor Chat
     end
 
   be join(client: Client, accumulator: Accumulator) =>
-    client.accepted(this, accumulator)
-
     _members.push(client)
 
     ifdef not "_BENCH_NO_BUFFERED_CHATS" then
@@ -101,6 +99,8 @@ actor Chat
         end
       end
     end
+
+    client.accepted(this, accumulator)
 
   be leave(client: Client, did_logout: Bool, accumulator: (Accumulator | None)) =>
     for (i, c) in _members.pairs() do
