@@ -164,14 +164,18 @@ class Chat usingPlatform: platform = Value (
 
         invitations:: friends size > 0
           ifTrue: [ rand next % friends size ]
-          ifFalse: [ 1 ].
+          ifFalse: [ 0 ].
+
+        invitations = 0 ifTrue: [
+          invitations:: 1 ].
 
         accumulator <-: bump: invitations act: #invite.
 
         createdP whenResolved: [:created |
           chats append: created ].
 
-        f do: [:k |
+        1 to: invitations do: [:i |
+          | k = f at: i. |
           createdP <-: join: k accu: accumulator ].
         ^ self ].
 
