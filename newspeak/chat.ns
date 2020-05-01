@@ -242,20 +242,23 @@ class Chat usingPlatform: platform = Value (
 
     public befriend = (
       clients do: [:friendTuple |
-        | friend fId |
         friendTuple ~= nil ifTrue: [
+          | friend fId madeFriends |
           friend:: friendTuple at: 2.
           fId:: friendTuple at: 1.
-          clients do: [:clientTuple |
-            | client cId |
-            clientTuple ~= nil ifTrue: [
-              client:: clientTuple at: 2.
-              cId:: clientTuple at: 1.
-              (* at this point in time, we are guaranteed that *)
-              ((random nextInt: 100) < numBefriends and: [fId <> cId])
-                ifTrue: [
-                  client <-: befriend: friend.
-                  friend <-: befriend: client ] ] ] ] ]
+          madeFriends:: false.
+
+          [madeFriends] whileFalse: [
+            clients do: [:clientTuple |
+              clientTuple ~= nil ifTrue: [
+                | client cId |
+                client:: clientTuple at: 2.
+                cId:: clientTuple at: 1.
+                ((random nextInt: 100) < numBefriends and: [fId <> cId])
+                  ifTrue: [
+                    madeFriends:: true.
+                    client <-: befriend: friend.
+                    friend <-: befriend: client ] ] ] ] ] ]
     )
 
     public left: clientId <Integer> = (
