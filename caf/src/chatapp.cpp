@@ -401,9 +401,9 @@ struct poker_state {
   const char* name = "poker";
 };
 
-caf::behavior
-poker(caf::stateful_actor<poker_state>* self, uint64_t clients, uint64_t turns,
-      size_t directories, uint64_t befriend, behavior_factory factory) {
+caf::behavior poker(caf::stateful_actor<poker_state>* self, uint64_t clients,
+                    uint64_t turns, size_t directories, uint64_t befriend,
+                    behavior_factory factory, bool parseable) {
   auto& s = self->state;
   s.clients = clients;
   s.logouts = 0;
@@ -489,7 +489,6 @@ poker(caf::stateful_actor<poker_state>* self, uint64_t clients, uint64_t turns,
 
           if (s.last) {
             sample_stats stats(s.turn_series);
-            std::vector<std::vector<double>> turns;
             std::vector<double> qos;
 
             // TODO Ask pony about line 381 to 391.
@@ -500,30 +499,38 @@ poker(caf::stateful_actor<poker_state>* self, uint64_t clients, uint64_t turns,
             }
 
             std::stringstream title_text;
-            title_text << std::string(31, ' ') << std::setw(18) << "j-mean"
-                       << std::setw(18) << "j-median" << std::setw(18)
-                       << "j-error" << std::setw(18) << "j-stddev"
-                       << std::setw(32) << "quality of service" << std::endl;
-
             std::stringstream result_text;
-            result_text << "Turns" << std::string(27, ' ') << std::setw(17)
-                        << stats.mean() << " " << std::setw(17)
-                        << stats.median() << " " << std::setw(17) << stats.err()
-                        << " " << std::setw(17) << stats.stddev() << " "
-                        << std::setw(31) << sample_stats(qos).median()
-                        << std::endl;
+            if (!parseable) {
+              title_text << std::string(31, ' ') << std::setw(18) << "j-mean"
+                         << std::setw(18) << "j-median" << std::setw(18)
+                         << "j-error" << std::setw(18) << "j-stddev"
+                         << std::setw(32) << "quality of service" << std::endl;
+              result_text << "Turns" << std::string(27, ' ') << std::setw(17)
+                          << stats.mean() << " " << std::setw(17)
+                          << stats.median() << " " << std::setw(17)
+                          << stats.err() << " " << std::setw(17)
+                          << stats.stddev() << " " << std::setw(31)
+                          << sample_stats(qos).median() << std::endl;
+            } else {
+              result_text << "Turns"
+                          << "," << stats.mean() << "," << stats.median() << ","
+                          << stats.err() << "," << stats.stddev() << ","
+                          << sample_stats(qos).median() << std::endl;
+            }
 
+            const char* separator = parseable ? "," : ": ";
             std::stringstream act_text;
-            act_text << std::endl
-                     << "Acts:" << std::endl
-                     << "Post: " << s.actions[action::post] << std::endl
-                     << "Leave: " << s.actions[action::leave] << std::endl
-                     << "Invite: " << s.actions[action::invite] << std::endl
-                     << "Compute: " << s.actions[action::compute] << std::endl
-                     << "Post Delivery: " << s.actions[action::post_delivery]
-                     << std::endl
-                     << "Ignore: " << s.actions[action::ignore] << std::endl
-                     << "None: " << s.actions[action::none] << std::endl;
+            if (!parseable)
+              act_text << "\nActs:\n";
+            act_text << "Post" << separator << s.actions[action::post]
+                     << "\nLeave" << separator << s.actions[action::leave]
+                     << "\nInvite" << separator << s.actions[action::invite]
+                     << "\nCompute" << separator << s.actions[action::compute]
+                     << "\nPostDelivery" << separator
+                     << s.actions[action::post_delivery]
+                     << "\nIgnore" << separator << s.actions[action::ignore]
+                     << "\nNone" << separator << s.actions[action::none]
+                     << std::endl;
 
             self->send(s.bench, append_atom::value, title_text.str(),
                        result_text.str(), act_text.str());
@@ -548,6 +555,7 @@ struct config : caf::actor_system_config {
   uint64_t leave = 10;
   uint64_t invite = 10;
   uint64_t befriend = 10;
+  bool parseable = false;
   config() {
     add_message_type<std::vector<uint8_t>>("std::vector<uint8_t>");
     add_message_type<std::vector<double>>("std::vector<double>");
@@ -566,8 +574,8 @@ struct config : caf::actor_system_config {
       .add(leave, "leave,l", "The leave behavior probability. Defaults to 10.")
       .add(invite, "invite,d",
            "The invite behavior probability. Defaults to 10.")
-      .add(befriend, "befriend,b", "The befriend probability. Defaults to 10.");
-    // TODO: What about the parseable opt?
+      .add(befriend, "befriend,b", "The befriend probability. Defaults to 10.")
+      .add(parseable, "parseable,P", "Print parseable outout in CSV.");
   }
 };
 
@@ -579,10 +587,10 @@ caf::behavior
 chatapp(caf::stateful_actor<chatapp_state>* self, const uint64_t clients,
         const uint64_t turns, const size_t directories, const uint64_t compute,
         const uint64_t post, const uint64_t leave, const uint64_t invite,
-        const uint64_t befriend) {
+        const uint64_t befriend, bool parseable) {
   auto factory = behavior_factory(compute, post, leave, invite);
-  auto poke_actor
-    = self->spawn(poker, clients, turns, directories, befriend, factory);
+  auto poke_actor = self->spawn(poker, clients, turns, directories, befriend,
+                                factory, parseable);
   return {
     [=](apply_atom, caf::actor& async_benchmark_completion, bool last) {
       self->send(poke_actor, apply_atom::value, async_benchmark_completion,
@@ -602,14 +610,9 @@ void caf_main(caf::actor_system& system, const config& cfg) {
   } else {
     auto chat = system.spawn(chatapp, cfg.clients, cfg.turns, cfg.directories,
                              cfg.compute, cfg.post, cfg.leave, cfg.invite,
-                             cfg.befriend);
+                             cfg.befriend, cfg.parseable);
     caf::scoped_actor self{system};
     std::vector<double> durations;
-    std::stringstream title_text;
-    title_text << std::string(31, ' ') << std::setw(18) << "i-mean"
-               << std::setw(18) << "i-median" << std::setw(18) << "i-error"
-               << std::setw(18) << "i-stddev" << std::endl;
-    std::cout << title_text.str();
     auto perform_run = [&](bool collect_data) {
       auto start = std::chrono::high_resolution_clock::now();
       self->send(chat, apply_atom::value, self, collect_data);
@@ -628,10 +631,19 @@ void caf_main(caf::actor_system& system, const config& cfg) {
                       std::string& act) {
       sample_stats stats(durations);
       std::stringstream result_text;
-      result_text << "ChatApp" << std::string(25, ' ') << std::setw(17)
-                  << stats.mean() << " " << std::setw(17) << stats.median()
-                  << " " << std::setw(17) << stats.err() << " " << std::setw(17)
-                  << stats.stddev() << " " << std::setw(17) << std::endl;
+      if (!cfg.parseable) {
+        result_text << std::string(31, ' ') << std::setw(18) << "i-mean"
+                    << std::setw(18) << "i-median" << std::setw(18) << "i-error"
+                    << std::setw(18) << "i-stddev" << std::endl
+                    << "Chat App" << std::string(24, ' ') << std::setw(17)
+                    << stats.mean() << " " << std::setw(17) << stats.median()
+                    << " " << std::setw(17) << stats.err() << " "
+                    << std::setw(17) << stats.stddev() << std::endl;
+      } else {
+        result_text << "Chat App"
+                    << "," << stats.mean() << "," << stats.median() << ","
+                    << stats.err() << "," << stats.stddev() << std::endl;
+      }
       std::cout << result_text.str();
       std::cout << title << result << act;
     });
