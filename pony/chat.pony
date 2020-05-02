@@ -6,6 +6,7 @@ use "util"
 use "math"
 use "format"
 use "term"
+use "assert"
 
 type ClientSeq is Array[Client]
 type ChatSeq is Array[Chat]
@@ -189,7 +190,8 @@ actor Client
           try created.join(f(k)?, accumulator) end
         end
       else
-        accumulator.stop(None)
+        // cannot happend
+        Fact(false)?
       end
     else
       accumulator.stop(None)
