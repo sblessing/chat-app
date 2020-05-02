@@ -53,6 +53,7 @@ class Result
         stats.mean().string()
         stats.median().string()
         stats.err().string()
+        stats.stddev().string()
       ].values())
     end
 

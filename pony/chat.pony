@@ -291,6 +291,7 @@ actor Accumulator
 
 actor Poker
   let _actions: ActionMap
+  let _parseable: Bool
   var _clients: U64
   var _logouts: USize
   var _confirmations: USize
@@ -305,8 +306,9 @@ actor Poker
   var _last: Bool
   var _turn_series: Array[F64]
 
-  new create(clients: U64, turns: U64, directories: USize, befriend: U32, factory: BehaviorFactory) =>
+  new create(parseable: Bool, clients: U64, turns: U64, directories: USize, befriend: U32, factory: BehaviorFactory) =>
     _actions = ActionMap
+    _parseable = parseable
     _clients = clients
     _logouts = 0
     _confirmations = 0
@@ -331,7 +333,6 @@ actor Poker
 
       dirs
     end
-
 
   be apply(bench: AsyncBenchmarkCompletion, last: Bool) =>
     _confirmations = _turns.usize()
@@ -432,9 +433,12 @@ actor Poker
             try qos.push(SampleStats(turns.pop()?).stddev()) end
           end
 
-          bench.append(
-            "".join(
-              [ ANSI.bold()
+          let quality_of_service: String val = SampleStats(qos = Array[F64]).median().string()
+
+          if not _parseable then
+            bench.append(
+              "".join([
+                ANSI.bold()
                 Format("" where width = 31)
                 Format("j-mean" where width = 18, align = AlignRight)
                 Format("j-median" where width = 18, align = AlignRight)
@@ -442,23 +446,33 @@ actor Poker
                 Format("j-stddev" where width = 18, align = AlignRight)
                 Format("quality of service" where width = 32, align = AlignRight)
                 ANSI.reset()
-              ].values()
+              ].values())
             )
-          )
 
-          bench.append(
-            "".join([
+            bench.append(
+              "".join([
                 Format("Turns" where width = 31)
                 Format(stats.mean().string() + " ms" where width = 18, align = AlignRight)
                 Format(stats.median().string() + " ms" where width = 18, align = AlignRight)
                 Format("±" + stats.err().string() + " %" where width = 18, align = AlignRight)
                 Format(stats.stddev().string() where width = 18, align = AlignRight)
-                Format(SampleStats(qos = Array[F64]).median().string() where width = 32, align = AlignRight)
-              ].values()
+                Format(quality_of_service where width = 32, align = AlignRight)
+              ].values())
             )
-          )
 
-          bench.append("")
+            bench.append("")
+          else
+            bench.append(
+              ",".join([
+                "Turns"
+                stats.mean().string()
+                stats.median().string()
+                stats.err().string()
+                stats.stddev().string()
+                quality_of_service
+              ].values())
+            )
+          end         
 
           for (key, value) in _actions.pairs() do
             // could make 'Actions' stringable
@@ -473,13 +487,22 @@ actor Poker
               | None         => "None"
               end
 
-            bench.append(
-              "".join([
-                  Format(identifier where width = 16)
-                  Format(value.string() where width = 10, align = AlignRight)
-                ].values()
+            if not _parseable then
+              bench.append(
+                "".join([
+                    Format(identifier where width = 16)
+                    Format(value.string() where width = 10, align = AlignRight)
+                  ].values()
+                )
               )
-            )
+            else
+              bench.append(
+                ",".join([
+                  identifier
+                  value.string()
+                ].values())
+              )
+            end
           end
         end
       end
@@ -503,6 +526,7 @@ class iso ChatApp is AsyncActorBenchmark
     let leave: U32 = cmd.option("leave").u64().u32()
     let invite: U32 = cmd.option("invite").u64().u32()
     let befriend: U32 = cmd.option("befriend").u64().u32()
+    let parseable: Bool = cmd.option("parseable").bool()
 
     let sum = compute + post + leave + invite
 
@@ -517,7 +541,7 @@ class iso ChatApp is AsyncActorBenchmark
 
     _factory = recover BehaviorFactory(compute, post, leave, invite) end
 
-    _poker = Poker(_clients, _turns, directories, befriend, _factory)
+    _poker = Poker(parseable, _clients, _turns, directories, befriend, _factory)
 
   fun box apply(c: AsyncBenchmarkCompletion, last: Bool) => 
     if _invalid_args == false then
