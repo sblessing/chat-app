@@ -534,6 +534,8 @@ actor Main is BenchmarkRunner
       let cs =
         recover
           CommandSpec.leaf("chat-app", "Cross Language Actor Benchmark", [
+            OptionSpec.u64("iterations", "The number of iterations to execute. Defaults to 32."
+              where short' = 'r', default' = U64(32))
             OptionSpec.u64("clients", "The number of clients. Defaults to 1024."
               where short' = 'c', default' = U64(1024))
             OptionSpec.u64("directories", "The number of directories. Defaults to 8."
@@ -568,4 +570,6 @@ actor Main is BenchmarkRunner
     end
 
   fun tag benchmarks(bench: Runner, env: Env, cmd: Command val) =>
-    bench(32, ChatApp(env, cmd))
+    let iterations: U64 = cmd.option("iterations").u64()
+
+    bench(iterations, ChatApp(env, cmd))
