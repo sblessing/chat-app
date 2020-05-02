@@ -194,7 +194,10 @@ actor Client
         Fact(false)?
       end
     else
-      accumulator.stop(None)
+      try 
+        Assert((_chats.size() == 0) and (_friends.size() > 0))?
+        accumulator.stop(None)
+      end
     end
 
 actor Directory
