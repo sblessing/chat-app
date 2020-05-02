@@ -41,6 +41,7 @@ using chat_seq = std::vector<caf::actor>;
 using action_map = std::unordered_map<action, uint64_t>;
 
 using payload = std::vector<uint8_t>;
+using time_point = std::chrono::time_point<std::chrono::high_resolution_clock>;
 
 // messages
 using post_atom = caf::atom_constant<caf::atom("post")>;
@@ -182,20 +183,17 @@ chat(caf::stateful_actor<chat_state>* self, const caf::actor initiator) {
 }
 
 struct client_state {
-  uint64_t id;
   client_seq friends;
   chat_seq chats;
-  caf::actor directory;
   dice_roll dice;
   pseudo_random rand;
   const char* name = "client";
 };
 
-caf::behavior client(caf::stateful_actor<client_state>* self, const uint64_t id,
-                     const caf::actor directory, uint64_t seed) {
+caf::behavior
+client(caf::stateful_actor<client_state>* self, const uint64_t /*id*/,
+       const caf::actor directory, uint64_t seed) {
   auto& s = self->state;
-  s.id = id;
-  s.directory = directory;
   s.rand = pseudo_random(seed);
   s.dice = dice_roll(s.rand);
   self->set_default_handler(caf::print_and_drop);
@@ -206,7 +204,7 @@ caf::behavior client(caf::stateful_actor<client_state>* self, const uint64_t id,
     [=](logout_atom) {
       auto& s = self->state;
       if (s.chats.empty()) {
-        self->send(s.directory, left_atom::value, self);
+        self->send(directory, left_atom::value, self);
         self->quit();
       } else
         for (auto& chat : s.chats)
@@ -219,7 +217,7 @@ caf::behavior client(caf::stateful_actor<client_state>* self, const uint64_t id,
       if (itr != s.chats.end())
         s.chats.erase(itr);
       if (did_logout && s.chats.empty()) {
-        self->send(s.directory, left_atom::value, self);
+        self->send(directory, left_atom::value, self);
         self->quit(); // TODO ask pony about this
       } else if (accumulator) {
         self->send(accumulator, stop_atom::value, action::leave);
@@ -285,7 +283,6 @@ caf::behavior client(caf::stateful_actor<client_state>* self, const uint64_t id,
 struct directory_state {
   client_seq clients;
   pseudo_random random;
-  uint32_t befriend;
   caf::actor poker;
   const char* name = "directory";
 };
@@ -294,7 +291,6 @@ caf::behavior directory(caf::stateful_actor<directory_state>* self,
                         uint64_t seed, uint32_t befriend) {
   auto& s = self->state;
   s.random = pseudo_random(seed);
-  s.befriend = befriend;
   self->set_default_handler(caf::print_and_drop);
   return {
     [=](login_atom, uint64_t id) {
@@ -306,7 +302,7 @@ caf::behavior directory(caf::stateful_actor<directory_state>* self,
       auto& s = self->state;
       for (auto& fclient : s.clients) {
         for (auto& client : s.clients) {
-          if ((s.random.next_int(100) < s.befriend) and fclient != client) {
+          if ((s.random.next_int(100) < befriend) and fclient != client) {
             self->send(client, befriend_atom::value, fclient);
             self->send(fclient, befriend_atom::value, client);
           }
@@ -335,13 +331,11 @@ caf::behavior directory(caf::stateful_actor<directory_state>* self,
   };
 }
 
-using time_point = std::chrono::time_point<std::chrono::high_resolution_clock>;
 struct accumulator_state {
-  caf::actor poker;
   action_map actions;
   time_point start;
   time_point end;
-  /// time in milliseconds
+  // time in milliseconds
   double duration;
   size_t expected;
   bool did_stop;
@@ -351,7 +345,6 @@ struct accumulator_state {
 caf::behavior accumulator(caf::stateful_actor<accumulator_state>* self,
                           const caf::actor poker, size_t expected) {
   auto& s = self->state;
-  s.poker = poker;
   s.start = std::chrono::high_resolution_clock::now();
   s.expected = expected;
   s.did_stop = false;
@@ -372,11 +365,11 @@ caf::behavior accumulator(caf::stateful_actor<accumulator_state>* self,
                        s.end - s.start)
                        .count();
         s.did_stop = true;
-        self->send(s.poker, confirm_atom::value);
+        self->send(poker, confirm_atom::value);
       }
     },
-    [=](print_atom, const caf::actor& poker, size_t i, size_t j) {
-      self->send(poker, collect_atom::value, i, j, self->state.duration,
+    [=](print_atom, const caf::actor& collector, size_t i, size_t j) {
+      self->send(collector, collect_atom::value, i, j, self->state.duration,
                  self->state.actions);
       self->quit();
     },
@@ -388,7 +381,6 @@ struct poker_state {
   uint64_t clients;
   size_t logouts;
   size_t confirmations;
-  uint64_t turns;
   size_t iteration;
   std::vector<caf::actor> directories;
   std::vector<caf::actor> runtimes;
@@ -402,36 +394,33 @@ struct poker_state {
 };
 
 caf::behavior poker(caf::stateful_actor<poker_state>* self, uint64_t clients,
-                    uint64_t turns, size_t directories, uint64_t befriend,
+                    uint64_t turns, size_t num_directories, uint64_t befriend,
                     behavior_factory factory, bool parseable) {
   auto& s = self->state;
-  s.clients = clients;
   s.logouts = 0;
   s.confirmations = 0;
-  s.turns = turns;
   s.iteration = 0;
-  s.factory = factory;
 
   auto rand = pseudo_random(42);
-  for (size_t i = 0; i < directories; ++i)
+  for (size_t i = 0; i < num_directories; ++i)
     s.directories.emplace_back(
       self->spawn(directory, rand.next_int(), befriend));
   self->set_default_handler(caf::print_and_drop);
   return {
     [=](apply_atom, caf::actor& bench, bool last) {
       auto& s = self->state;
-      s.confirmations = static_cast<size_t>(s.turns);
+      s.confirmations = static_cast<size_t>(turns);
       s.logouts = s.directories.size();
       s.bench = bench;
       s.last = last;
       s.accumulations = 0;
 
       size_t index = 0;
-      std::vector<double> values(s.turns, 0);
+      std::vector<double> values(turns, 0);
 
       s.finals.emplace_back(std::move(values));
 
-      for (size_t client = 0; client < s.clients; ++client) {
+      for (size_t client = 0; client < clients; ++client) {
         index = client % s.directories.size();
         self->send(s.directories[index], login_atom::value, client);
       }
@@ -440,11 +429,11 @@ caf::behavior poker(caf::stateful_actor<poker_state>* self, uint64_t clients,
         self->send(dir, befriend_atom::value);
       }
       // feedback loop?
-      for (uint64_t i = 0; i < s.turns; ++i) {
+      for (uint64_t i = 0; i < turns; ++i) {
         auto accu
-          = self->spawn(accumulator, self, static_cast<size_t>(s.clients));
+          = self->spawn(accumulator, self, static_cast<size_t>(clients));
         for (auto& directory : s.directories)
-          self->send(directory, poke_atom::value, s.factory, accu);
+          self->send(directory, poke_atom::value, factory, accu);
         s.runtimes.push_back(accu);
       }
     },
@@ -491,8 +480,6 @@ caf::behavior poker(caf::stateful_actor<poker_state>* self, uint64_t clients,
             sample_stats stats(s.turn_series);
             std::vector<double> qos;
 
-            // TODO Ask pony about line 381 to 391.
-
             for (size_t l = 0; l < s.finals.size(); ++l) {
               qos.push_back(sample_stats(s.finals.back()).stddev());
               s.finals.pop_back();
@@ -521,16 +508,15 @@ caf::behavior poker(caf::stateful_actor<poker_state>* self, uint64_t clients,
             const char* separator = parseable ? "," : ": ";
             std::stringstream act_text;
             if (!parseable)
-              act_text << "\nActs:\n";
-            act_text << "Post" << separator << s.actions[action::post]
+              act_text << "\nActs:";
+            act_text << "\nPost" << separator << s.actions[action::post]
                      << "\nLeave" << separator << s.actions[action::leave]
                      << "\nInvite" << separator << s.actions[action::invite]
                      << "\nCompute" << separator << s.actions[action::compute]
                      << "\nPostDelivery" << separator
-                     << s.actions[action::post_delivery]
-                     << "\nIgnore" << separator << s.actions[action::ignore]
-                     << "\nNone" << separator << s.actions[action::none]
-                     << std::endl;
+                     << s.actions[action::post_delivery] << "\nIgnore"
+                     << separator << s.actions[action::ignore] << "\nNone"
+                     << separator << s.actions[action::none] << std::endl;
 
             self->send(s.bench, append_atom::value, title_text.str(),
                        result_text.str(), act_text.str());
