@@ -175,7 +175,6 @@ chat(caf::stateful_actor<chat_state>* self, const caf::actor initiator) {
       if (itr != s.members.end())
         s.members.erase(itr);
       self->send(client, left_atom::value, self, did_logout, accumulator);
-      // TODO: Is this correct?
       if (s.members.empty())
         self->quit();
     },
@@ -195,7 +194,7 @@ client(caf::stateful_actor<client_state>* self, const uint64_t /*id*/,
        const caf::actor directory, uint64_t seed) {
   auto& s = self->state;
   s.rand = pseudo_random(seed);
-  s.dice = dice_roll(s.rand);
+  s.dice = dice_roll{s.rand};
   self->set_default_handler(caf::print_and_drop);
   return {
     [=](befriend_atom, const caf::actor& client) {
@@ -218,7 +217,7 @@ client(caf::stateful_actor<client_state>* self, const uint64_t /*id*/,
         s.chats.erase(itr);
       if (did_logout && s.chats.empty()) {
         self->send(directory, left_atom::value, self);
-        self->quit(); // TODO ask pony about this
+        self->quit();
       } else if (accumulator) {
         self->send(accumulator, stop_atom::value, action::leave);
       }
@@ -233,7 +232,9 @@ client(caf::stateful_actor<client_state>* self, const uint64_t /*id*/,
     },
     [=](act_atom, behavior_factory& behavior, const caf::actor& accumulator) {
       auto& s = self->state;
-      size_t index = s.rand.next_int(s.chats.size());
+      auto index = static_cast<size_t>(
+        s.rand.next_int(static_cast<uint32_t>(s.chats.size())));
+      //dice_roll dice(s.rand);
       switch (behavior.apply(s.dice)) {
         case action::post:
           if (!s.chats.empty())
@@ -254,18 +255,16 @@ client(caf::stateful_actor<client_state>* self, const uint64_t /*id*/,
           self->send(accumulator, stop_atom::value, action::compute);
           break;
         case action::invite: {
+          assert(s.friends.size() != 0);
           auto created = self->spawn(chat, self);
           s.chats.emplace_back(created);
           std::vector<caf::actor> f(s.friends.size());
           std::copy(s.friends.begin(), s.friends.end(), f.begin());
           s.rand.shuffle(f);
-          auto invitations
-            = s.friends.empty()
-                ? 0
-                : static_cast<size_t>(s.rand.next_long() % s.friends.size());
-          if (invitations == 0) {
+          auto invitations = static_cast<size_t>(
+            s.rand.next_int(static_cast<uint32_t>(s.friends.size())));
+          if (invitations == 0)
             invitations = 1;
-          }
           self->send(accumulator, bump_atom::value, action::invite,
                      invitations);
           for (size_t i = 0; i < invitations; ++i)
@@ -273,6 +272,7 @@ client(caf::stateful_actor<client_state>* self, const uint64_t /*id*/,
           break;
         }
         default: // case action::none:
+          assert(s.chats().size() == 0 && s.friends.size() > 0);
           self->send(accumulator, stop_atom::value, action::none);
           break;
       }
@@ -296,7 +296,7 @@ caf::behavior directory(caf::stateful_actor<directory_state>* self,
     [=](login_atom, uint64_t id) {
       auto& s = self->state;
       s.clients.emplace_back(
-        self->spawn(client, id, self, s.random.next_long()));
+        self->spawn(client, id, self, s.random.next()));
     },
     [=](befriend_atom) {
       auto& s = self->state;
@@ -404,7 +404,7 @@ caf::behavior poker(caf::stateful_actor<poker_state>* self, uint64_t clients,
   auto rand = pseudo_random(42);
   for (size_t i = 0; i < num_directories; ++i)
     s.directories.emplace_back(
-      self->spawn(directory, rand.next_int(), befriend));
+      self->spawn(directory, rand.next(), befriend));
   self->set_default_handler(caf::print_and_drop);
   return {
     [=](apply_atom, caf::actor& bench, bool last) {
@@ -425,9 +425,8 @@ caf::behavior poker(caf::stateful_actor<poker_state>* self, uint64_t clients,
         self->send(s.directories[index], login_atom::value, client);
       }
       // To make sure that nobody's friendset is empty
-      for (auto& dir : s.directories) {
+      for (auto& dir : s.directories)
         self->send(dir, befriend_atom::value);
-      }
       // feedback loop?
       for (uint64_t i = 0; i < turns; ++i) {
         auto accu

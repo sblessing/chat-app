@@ -4,10 +4,9 @@
 
 class dice_roll {
 public:
-  dice_roll()
-    : random_(42){
-      // nop
-    };
+  dice_roll() : random_{42} {
+    // nop
+  }
 
   explicit dice_roll(pseudo_random rand) : random_(rand) {
     // nop
