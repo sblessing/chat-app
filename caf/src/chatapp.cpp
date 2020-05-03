@@ -4,7 +4,6 @@
 #include <vector>
 
 // util
-#include "util/dice_roll.hpp"
 #include "util/pseudo_random.hpp"
 #include "util/stats.hpp"
 
@@ -83,8 +82,7 @@ struct behavior_factory {
 
   behavior_factory(const behavior_factory& f) = default;
 
-  action apply(dice_roll dice) const {
-    auto pick = dice.apply();
+  action apply(uint32_t pick) const {
     auto next_action = action::none;
     if (pick < _compute)
       next_action = action::compute;
@@ -184,7 +182,6 @@ chat(caf::stateful_actor<chat_state>* self, const caf::actor initiator) {
 struct client_state {
   client_seq friends;
   chat_seq chats;
-  dice_roll dice;
   pseudo_random rand;
   const char* name = "client";
 };
@@ -194,7 +191,6 @@ client(caf::stateful_actor<client_state>* self, const uint64_t /*id*/,
        const caf::actor directory, uint64_t seed) {
   auto& s = self->state;
   s.rand = pseudo_random(seed);
-  s.dice = dice_roll{s.rand};
   self->set_default_handler(caf::print_and_drop);
   return {
     [=](befriend_atom, const caf::actor& client) {
@@ -230,12 +226,11 @@ client(caf::stateful_actor<client_state>* self, const uint64_t /*id*/,
         const caf::actor& accumulator) {
       self->send(accumulator, stop_atom::value, action::post_delivery);
     },
-    [=](act_atom, behavior_factory& behavior, const caf::actor& accumulator) {
+    [=](act_atom, behavior_factory& factory, const caf::actor& accumulator) {
       auto& s = self->state;
       auto index = static_cast<size_t>(
         s.rand.next_int(static_cast<uint32_t>(s.chats.size())));
-      //dice_roll dice(s.rand);
-      switch (behavior.apply(s.dice)) {
+      switch (factory.apply(s.rand.next_int(100))) {
         case action::post:
           if (!s.chats.empty())
             self->send(s.chats[index], post_atom::value, payload{},
