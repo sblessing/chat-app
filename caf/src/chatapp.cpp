@@ -552,7 +552,7 @@ struct config : caf::actor_system_config {
            "The compute behavior probability. Defaults to 55.")
       .add(post, "post,p", "The post behavior probability. Defaults to 25.")
       .add(leave, "leave,l", "The leave behavior probability. Defaults to 10.")
-      .add(invite, "invite,d",
+      .add(invite, "invite,i",
            "The invite behavior probability. Defaults to 10.")
       .add(befriend, "befriend,b", "The befriend probability. Defaults to 10.")
       .add(parseable, "parseable,P", "Print parseable outout in CSV.");
