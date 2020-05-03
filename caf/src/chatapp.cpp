@@ -295,8 +295,8 @@ caf::behavior directory(caf::stateful_actor<directory_state>* self,
     },
     [=](befriend_atom) {
       auto& s = self->state;
-      for (auto& fclient : s.clients) {
-        for (auto& client : s.clients) {
+      for (const auto& fclient : s.clients) {
+        for (const auto& client : s.clients) {
           if ((s.random.next_int(100) < befriend) and fclient != client) {
             self->send(client, befriend_atom::value, fclient);
             self->send(fclient, befriend_atom::value, client);
@@ -312,9 +312,9 @@ caf::behavior directory(caf::stateful_actor<directory_state>* self,
       if (s.clients.empty())
         self->send(s.poker, finished_atom::value);
     },
-    [=](poke_atom, behavior_factory& behavior, const caf::actor& accumulator) {
+    [=](poke_atom, const behavior_factory& factory, const caf::actor& accumulator) {
       for (auto& client : self->state.clients)
-        self->send(client, act_atom::value, behavior, accumulator);
+        self->send(client, act_atom::value, factory, accumulator);
     },
     [=](disconnect_atom, caf::actor& poker) {
       auto& s = self->state;
@@ -335,6 +335,10 @@ struct accumulator_state {
   size_t expected;
   bool did_stop;
   const char* name = "accumulator";
+
+  void count(const action act) {
+    ++actions[act];
+  }
 };
 
 caf::behavior accumulator(caf::stateful_actor<accumulator_state>* self,
@@ -345,14 +349,14 @@ caf::behavior accumulator(caf::stateful_actor<accumulator_state>* self,
   s.did_stop = false;
   self->set_default_handler(caf::print_and_drop);
   return {
-    [=](bump_atom, const action act, const size_t expected) {
+    [=](bump_atom, const action act, const size_t increase) {
       auto& s = self->state;
-      ++s.actions[act];
-      s.expected = (s.expected + expected) - 1;
+      s.count(act);
+      s.expected = (s.expected + increase) - 1;
     },
     [=](stop_atom, const action act) {
       auto& s = self->state;
-      ++s.actions[act];
+      s.count(act);
       --s.expected;
       if (s.expected == 0) {
         s.end = std::chrono::high_resolution_clock::now();
@@ -368,12 +372,14 @@ caf::behavior accumulator(caf::stateful_actor<accumulator_state>* self,
                  self->state.actions);
       self->quit();
     },
+    caf::after(std::chrono::seconds(10)) >> [=] {
+      aout(self) << "[" << self->id() << "] still expected: " << s.expected << std::endl;
+    }
   };
 }
 
 struct poker_state {
   action_map actions;
-  uint64_t clients;
   size_t logouts;
   size_t confirmations;
   size_t iteration;
@@ -397,6 +403,7 @@ caf::behavior poker(caf::stateful_actor<poker_state>* self, uint64_t clients,
   s.iteration = 0;
 
   auto rand = pseudo_random(42);
+  s.directories.reserve(num_directories);
   for (size_t i = 0; i < num_directories; ++i)
     s.directories.emplace_back(
       self->spawn(directory, rand.next(), befriend));
@@ -415,18 +422,18 @@ caf::behavior poker(caf::stateful_actor<poker_state>* self, uint64_t clients,
 
       s.finals.emplace_back(std::move(values));
 
-      for (size_t client = 0; client < clients; ++client) {
+      for (uint64_t client = 0; client < clients; ++client) {
         index = client % s.directories.size();
         self->send(s.directories[index], login_atom::value, client);
       }
       // To make sure that nobody's friendset is empty
-      for (auto& dir : s.directories)
+      for (const auto& dir : s.directories)
         self->send(dir, befriend_atom::value);
       // feedback loop?
       for (uint64_t i = 0; i < turns; ++i) {
         auto accu
           = self->spawn(accumulator, self, static_cast<size_t>(clients));
-        for (auto& directory : s.directories)
+        for (const auto& directory : s.directories)
           self->send(directory, poke_atom::value, factory, accu);
         s.runtimes.push_back(accu);
       }
@@ -539,8 +546,6 @@ struct config : caf::actor_system_config {
   config() {
     add_message_type<std::vector<uint8_t>>("std::vector<uint8_t>");
     add_message_type<std::vector<double>>("std::vector<double>");
-    add_message_type<size_t>("size_t");
-    add_message_type<uint64_t>("uint64_t");
     add_message_type<behavior_factory>("behavior_factory");
     opt_group{custom_options_, "global"}
       .add(run, "run,r", "The number of iterations. Defaults to 32")
