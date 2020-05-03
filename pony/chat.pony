@@ -172,11 +172,7 @@ actor Client
         let created = Chat(this)
 
         _chats.push(created)
-
-        // Again convert the set values to an array, in order
-        // to be able to use shuffle from rand
-        let f = _friends.clone()
-        _rand.shuffle[Client](f)
+        _rand.shuffle[Client](_friends)
 
         var invitations: USize = _rand.nextInt(_friends.size().u32()).usize()
 
@@ -187,7 +183,7 @@ actor Client
         accumulator.bump(Invite, invitations)
   
         for k in Range[USize](0, invitations) do
-          try created.join(f(k)?, accumulator) end
+          try created.join(_friends(k)?, accumulator) end
         end
       else
         // cannot happend
@@ -259,7 +255,7 @@ actor Accumulator
   var _expected: USize
   var _did_stop: Bool
 
-  new create(poker: Poker, expected: USize) =>
+  new start(poker: Poker, expected: USize) =>
     _poker = poker
     _actions = recover ActionMap end
     _start = Time.millis().f64()
@@ -365,7 +361,7 @@ actor Poker
     end
 
     while ( turns = turns - 1 ) >= 1 do
-      let accumulator = Accumulator(this, _clients.usize())
+      let accumulator = Accumulator.start(this, _clients.usize())
 
       for directory in _directories.values() do
         directory.poke(_factory, accumulator)
