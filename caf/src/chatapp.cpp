@@ -2,6 +2,7 @@
 #include <chrono>
 #include <string>
 #include <vector>
+#include <cassert>
 
 // util
 #include "util/pseudo_random.hpp"
@@ -560,7 +561,7 @@ struct config : caf::actor_system_config {
       .add(invite, "invite,i",
            "The invite behavior probability. Defaults to 10.")
       .add(befriend, "befriend,b", "The befriend probability. Defaults to 10.")
-      .add(parseable, "parseable,P", "Print parseable outout in CSV.");
+      .add(parseable, "parseable,P", "Print parseable output in CSV.");
   }
 };
 
