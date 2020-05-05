@@ -174,8 +174,6 @@ chat(caf::stateful_actor<chat_state>* self, const caf::actor initiator) {
       if (itr != s.members.end())
         s.members.erase(itr);
       self->send(client, left_atom::value, self, did_logout, accumulator);
-      if (s.members.empty())
-        self->quit();
     },
   };
 }
