@@ -1,10 +1,10 @@
 #include <algorithm>
+#include <cassert>
 #include <chrono>
 #include <string>
 #include <vector>
 
 // util
-#include "util/dice_roll.hpp"
 #include "util/pseudo_random.hpp"
 #include "util/stats.hpp"
 
@@ -41,6 +41,7 @@ using chat_seq = std::vector<caf::actor>;
 using action_map = std::unordered_map<action, uint64_t>;
 
 using payload = std::vector<uint8_t>;
+using time_point = std::chrono::time_point<std::chrono::high_resolution_clock>;
 
 // messages
 using post_atom = caf::atom_constant<caf::atom("post")>;
@@ -82,8 +83,7 @@ struct behavior_factory {
 
   behavior_factory(const behavior_factory& f) = default;
 
-  action apply(dice_roll dice) const {
-    auto pick = dice.apply();
+  action apply(uint32_t pick) const {
     auto next_action = action::none;
     if (pick < _compute)
       next_action = action::compute;
@@ -135,7 +135,6 @@ struct chat_state {
 caf::behavior
 chat(caf::stateful_actor<chat_state>* self, const caf::actor initiator) {
   self->state.members.emplace_back(initiator);
-  // TODO: Check if all messages are handled.
   self->set_default_handler(caf::print_and_drop);
   return {
     [=](post_atom, payload& pl, const caf::actor& accumulator) {
@@ -174,30 +173,22 @@ chat(caf::stateful_actor<chat_state>* self, const caf::actor initiator) {
       if (itr != s.members.end())
         s.members.erase(itr);
       self->send(client, left_atom::value, self, did_logout, accumulator);
-      // TODO: Is this correct?
-      if (s.members.empty())
-        self->quit();
     },
   };
 }
 
 struct client_state {
-  uint64_t id;
   client_seq friends;
   chat_seq chats;
-  caf::actor directory;
-  dice_roll dice;
   pseudo_random rand;
   const char* name = "client";
 };
 
-caf::behavior client(caf::stateful_actor<client_state>* self, const uint64_t id,
-                     const caf::actor directory, uint64_t seed) {
+caf::behavior
+client(caf::stateful_actor<client_state>* self, const uint64_t /*id*/,
+       const caf::actor directory, uint64_t seed) {
   auto& s = self->state;
-  s.id = id;
-  s.directory = directory;
   s.rand = pseudo_random(seed);
-  s.dice = dice_roll(s.rand);
   self->set_default_handler(caf::print_and_drop);
   return {
     [=](befriend_atom, const caf::actor& client) {
@@ -206,7 +197,7 @@ caf::behavior client(caf::stateful_actor<client_state>* self, const uint64_t id,
     [=](logout_atom) {
       auto& s = self->state;
       if (s.chats.empty()) {
-        self->send(s.directory, left_atom::value, self);
+        self->send(directory, left_atom::value, self);
         self->quit();
       } else
         for (auto& chat : s.chats)
@@ -219,8 +210,8 @@ caf::behavior client(caf::stateful_actor<client_state>* self, const uint64_t id,
       if (itr != s.chats.end())
         s.chats.erase(itr);
       if (did_logout && s.chats.empty()) {
-        self->send(s.directory, left_atom::value, self);
-        self->quit(); // TODO ask pony about this
+        self->send(directory, left_atom::value, self);
+        self->quit();
       } else if (accumulator) {
         self->send(accumulator, stop_atom::value, action::leave);
       }
@@ -233,10 +224,11 @@ caf::behavior client(caf::stateful_actor<client_state>* self, const uint64_t id,
         const caf::actor& accumulator) {
       self->send(accumulator, stop_atom::value, action::post_delivery);
     },
-    [=](act_atom, behavior_factory& behavior, const caf::actor& accumulator) {
+    [=](act_atom, behavior_factory& factory, const caf::actor& accumulator) {
       auto& s = self->state;
-      size_t index = s.rand.next_int(s.chats.size());
-      switch (behavior.apply(s.dice)) {
+      auto index = static_cast<size_t>(
+        s.rand.next_int(static_cast<uint32_t>(s.chats.size())));
+      switch (factory.apply(s.rand.next_int(100))) {
         case action::post:
           if (!s.chats.empty())
             self->send(s.chats[index], post_atom::value, payload{},
@@ -256,18 +248,16 @@ caf::behavior client(caf::stateful_actor<client_state>* self, const uint64_t id,
           self->send(accumulator, stop_atom::value, action::compute);
           break;
         case action::invite: {
+          assert(s.friends.size() != 0);
           auto created = self->spawn(chat, self);
           s.chats.emplace_back(created);
           std::vector<caf::actor> f(s.friends.size());
           std::copy(s.friends.begin(), s.friends.end(), f.begin());
           s.rand.shuffle(f);
-          auto invitations
-            = s.friends.empty()
-                ? 0
-                : static_cast<size_t>(s.rand.next_long() % s.friends.size());
-          if (invitations == 0) {
+          auto invitations = static_cast<size_t>(
+            s.rand.next_int(static_cast<uint32_t>(s.friends.size())));
+          if (invitations == 0)
             invitations = 1;
-          }
           self->send(accumulator, bump_atom::value, action::invite,
                      invitations);
           for (size_t i = 0; i < invitations; ++i)
@@ -275,6 +265,7 @@ caf::behavior client(caf::stateful_actor<client_state>* self, const uint64_t id,
           break;
         }
         default: // case action::none:
+          assert(s.chats().size() == 0 && s.friends.size() > 0);
           self->send(accumulator, stop_atom::value, action::none);
           break;
       }
@@ -285,7 +276,6 @@ caf::behavior client(caf::stateful_actor<client_state>* self, const uint64_t id,
 struct directory_state {
   client_seq clients;
   pseudo_random random;
-  uint32_t befriend;
   caf::actor poker;
   const char* name = "directory";
 };
@@ -294,19 +284,17 @@ caf::behavior directory(caf::stateful_actor<directory_state>* self,
                         uint64_t seed, uint32_t befriend) {
   auto& s = self->state;
   s.random = pseudo_random(seed);
-  s.befriend = befriend;
   self->set_default_handler(caf::print_and_drop);
   return {
     [=](login_atom, uint64_t id) {
       auto& s = self->state;
-      s.clients.emplace_back(
-        self->spawn(client, id, self, s.random.next_long()));
+      s.clients.emplace_back(self->spawn(client, id, self, s.random.next()));
     },
     [=](befriend_atom) {
       auto& s = self->state;
-      for (auto& fclient : s.clients) {
-        for (auto& client : s.clients) {
-          if ((s.random.next_int(100) < s.befriend) and fclient != client) {
+      for (const auto& fclient : s.clients) {
+        for (const auto& client : s.clients) {
+          if ((s.random.next_int(100) < befriend) and fclient != client) {
             self->send(client, befriend_atom::value, fclient);
             self->send(fclient, befriend_atom::value, client);
           }
@@ -321,9 +309,10 @@ caf::behavior directory(caf::stateful_actor<directory_state>* self,
       if (s.clients.empty())
         self->send(s.poker, finished_atom::value);
     },
-    [=](poke_atom, behavior_factory& behavior, const caf::actor& accumulator) {
+    [=](poke_atom, const behavior_factory& factory,
+        const caf::actor& accumulator) {
       for (auto& client : self->state.clients)
-        self->send(client, act_atom::value, behavior, accumulator);
+        self->send(client, act_atom::value, factory, accumulator);
     },
     [=](disconnect_atom, caf::actor& poker) {
       auto& s = self->state;
@@ -335,36 +324,37 @@ caf::behavior directory(caf::stateful_actor<directory_state>* self,
   };
 }
 
-using time_point = std::chrono::time_point<std::chrono::high_resolution_clock>;
 struct accumulator_state {
-  caf::actor poker;
   action_map actions;
   time_point start;
   time_point end;
-  /// time in milliseconds
+  // time in milliseconds
   double duration;
   size_t expected;
   bool did_stop;
   const char* name = "accumulator";
+
+  void count(const action act) {
+    ++actions[act];
+  }
 };
 
 caf::behavior accumulator(caf::stateful_actor<accumulator_state>* self,
                           const caf::actor poker, size_t expected) {
   auto& s = self->state;
-  s.poker = poker;
   s.start = std::chrono::high_resolution_clock::now();
   s.expected = expected;
   s.did_stop = false;
   self->set_default_handler(caf::print_and_drop);
   return {
-    [=](bump_atom, const action act, const size_t expected) {
+    [=](bump_atom, const action act, const size_t increase) {
       auto& s = self->state;
-      ++s.actions[act];
-      s.expected = (s.expected + expected) - 1;
+      s.count(act);
+      s.expected = (s.expected + increase) - 1;
     },
     [=](stop_atom, const action act) {
       auto& s = self->state;
-      ++s.actions[act];
+      s.count(act);
       --s.expected;
       if (s.expected == 0) {
         s.end = std::chrono::high_resolution_clock::now();
@@ -372,11 +362,11 @@ caf::behavior accumulator(caf::stateful_actor<accumulator_state>* self,
                        s.end - s.start)
                        .count();
         s.did_stop = true;
-        self->send(s.poker, confirm_atom::value);
+        self->send(poker, confirm_atom::value);
       }
     },
-    [=](print_atom, const caf::actor& poker, size_t i, size_t j) {
-      self->send(poker, collect_atom::value, i, j, self->state.duration,
+    [=](print_atom, const caf::actor& collector, size_t i, size_t j) {
+      self->send(collector, collect_atom::value, i, j, self->state.duration,
                  self->state.actions);
       self->quit();
     },
@@ -385,10 +375,8 @@ caf::behavior accumulator(caf::stateful_actor<accumulator_state>* self,
 
 struct poker_state {
   action_map actions;
-  uint64_t clients;
   size_t logouts;
   size_t confirmations;
-  uint64_t turns;
   size_t iteration;
   std::vector<caf::actor> directories;
   std::vector<caf::actor> runtimes;
@@ -402,49 +390,44 @@ struct poker_state {
 };
 
 caf::behavior poker(caf::stateful_actor<poker_state>* self, uint64_t clients,
-                    uint64_t turns, size_t directories, uint64_t befriend,
+                    uint64_t turns, size_t num_directories, uint64_t befriend,
                     behavior_factory factory, bool parseable) {
   auto& s = self->state;
-  s.clients = clients;
   s.logouts = 0;
   s.confirmations = 0;
-  s.turns = turns;
   s.iteration = 0;
-  s.factory = factory;
 
   auto rand = pseudo_random(42);
-  for (size_t i = 0; i < directories; ++i)
-    s.directories.emplace_back(
-      self->spawn(directory, rand.next_int(), befriend));
+  s.directories.reserve(num_directories);
+  for (size_t i = 0; i < num_directories; ++i)
+    s.directories.emplace_back(self->spawn(directory, rand.next(), befriend));
   self->set_default_handler(caf::print_and_drop);
   return {
     [=](apply_atom, caf::actor& bench, bool last) {
       auto& s = self->state;
-      s.confirmations = static_cast<size_t>(s.turns);
+      s.confirmations = static_cast<size_t>(turns);
       s.logouts = s.directories.size();
       s.bench = bench;
       s.last = last;
       s.accumulations = 0;
 
       size_t index = 0;
-      std::vector<double> values(s.turns, 0);
+      std::vector<double> values(turns, 0);
 
       s.finals.emplace_back(std::move(values));
 
-      for (size_t client = 0; client < s.clients; ++client) {
+      for (uint64_t client = 0; client < clients; ++client) {
         index = client % s.directories.size();
         self->send(s.directories[index], login_atom::value, client);
       }
       // To make sure that nobody's friendset is empty
-      for (auto& dir : s.directories) {
+      for (const auto& dir : s.directories)
         self->send(dir, befriend_atom::value);
-      }
-      // feedback loop?
-      for (uint64_t i = 0; i < s.turns; ++i) {
+      for (uint64_t i = 0; i < turns; ++i) {
         auto accu
-          = self->spawn(accumulator, self, static_cast<size_t>(s.clients));
-        for (auto& directory : s.directories)
-          self->send(directory, poke_atom::value, s.factory, accu);
+          = self->spawn(accumulator, self, static_cast<size_t>(clients));
+        for (const auto& directory : s.directories)
+          self->send(directory, poke_atom::value, factory, accu);
         s.runtimes.push_back(accu);
       }
     },
@@ -491,8 +474,6 @@ caf::behavior poker(caf::stateful_actor<poker_state>* self, uint64_t clients,
             sample_stats stats(s.turn_series);
             std::vector<double> qos;
 
-            // TODO Ask pony about line 381 to 391.
-
             for (size_t l = 0; l < s.finals.size(); ++l) {
               qos.push_back(sample_stats(s.finals.back()).stddev());
               s.finals.pop_back();
@@ -521,16 +502,15 @@ caf::behavior poker(caf::stateful_actor<poker_state>* self, uint64_t clients,
             const char* separator = parseable ? "," : ": ";
             std::stringstream act_text;
             if (!parseable)
-              act_text << "\nActs:\n";
-            act_text << "Post" << separator << s.actions[action::post]
+              act_text << "\nActs:";
+            act_text << "\nPost" << separator << s.actions[action::post]
                      << "\nLeave" << separator << s.actions[action::leave]
                      << "\nInvite" << separator << s.actions[action::invite]
                      << "\nCompute" << separator << s.actions[action::compute]
                      << "\nPostDelivery" << separator
-                     << s.actions[action::post_delivery]
-                     << "\nIgnore" << separator << s.actions[action::ignore]
-                     << "\nNone" << separator << s.actions[action::none]
-                     << std::endl;
+                     << s.actions[action::post_delivery] << "\nIgnore"
+                     << separator << s.actions[action::ignore] << "\nNone"
+                     << separator << s.actions[action::none] << std::endl;
 
             self->send(s.bench, append_atom::value, title_text.str(),
                        result_text.str(), act_text.str());
@@ -559,8 +539,6 @@ struct config : caf::actor_system_config {
   config() {
     add_message_type<std::vector<uint8_t>>("std::vector<uint8_t>");
     add_message_type<std::vector<double>>("std::vector<double>");
-    add_message_type<size_t>("size_t");
-    add_message_type<uint64_t>("uint64_t");
     add_message_type<behavior_factory>("behavior_factory");
     opt_group{custom_options_, "global"}
       .add(run, "run,r", "The number of iterations. Defaults to 32")
@@ -572,10 +550,10 @@ struct config : caf::actor_system_config {
            "The compute behavior probability. Defaults to 55.")
       .add(post, "post,p", "The post behavior probability. Defaults to 25.")
       .add(leave, "leave,l", "The leave behavior probability. Defaults to 10.")
-      .add(invite, "invite,d",
+      .add(invite, "invite,i",
            "The invite behavior probability. Defaults to 10.")
       .add(befriend, "befriend,b", "The befriend probability. Defaults to 10.")
-      .add(parseable, "parseable,P", "Print parseable outout in CSV.");
+      .add(parseable, "parseable,P", "Print parseable output in CSV.");
   }
 };
 
