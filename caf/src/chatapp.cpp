@@ -1,8 +1,8 @@
 #include <algorithm>
+#include <cassert>
 #include <chrono>
 #include <string>
 #include <vector>
-#include <cassert>
 
 // util
 #include "util/pseudo_random.hpp"
@@ -135,7 +135,6 @@ struct chat_state {
 caf::behavior
 chat(caf::stateful_actor<chat_state>* self, const caf::actor initiator) {
   self->state.members.emplace_back(initiator);
-  // TODO: Check if all messages are handled.
   self->set_default_handler(caf::print_and_drop);
   return {
     [=](post_atom, payload& pl, const caf::actor& accumulator) {
@@ -289,8 +288,7 @@ caf::behavior directory(caf::stateful_actor<directory_state>* self,
   return {
     [=](login_atom, uint64_t id) {
       auto& s = self->state;
-      s.clients.emplace_back(
-        self->spawn(client, id, self, s.random.next()));
+      s.clients.emplace_back(self->spawn(client, id, self, s.random.next()));
     },
     [=](befriend_atom) {
       auto& s = self->state;
@@ -311,7 +309,8 @@ caf::behavior directory(caf::stateful_actor<directory_state>* self,
       if (s.clients.empty())
         self->send(s.poker, finished_atom::value);
     },
-    [=](poke_atom, const behavior_factory& factory, const caf::actor& accumulator) {
+    [=](poke_atom, const behavior_factory& factory,
+        const caf::actor& accumulator) {
       for (auto& client : self->state.clients)
         self->send(client, act_atom::value, factory, accumulator);
     },
@@ -371,9 +370,6 @@ caf::behavior accumulator(caf::stateful_actor<accumulator_state>* self,
                  self->state.actions);
       self->quit();
     },
-    caf::after(std::chrono::seconds(10)) >> [=] {
-      aout(self) << "[" << self->id() << "] still expected: " << s.expected << std::endl;
-    }
   };
 }
 
@@ -404,8 +400,7 @@ caf::behavior poker(caf::stateful_actor<poker_state>* self, uint64_t clients,
   auto rand = pseudo_random(42);
   s.directories.reserve(num_directories);
   for (size_t i = 0; i < num_directories; ++i)
-    s.directories.emplace_back(
-      self->spawn(directory, rand.next(), befriend));
+    s.directories.emplace_back(self->spawn(directory, rand.next(), befriend));
   self->set_default_handler(caf::print_and_drop);
   return {
     [=](apply_atom, caf::actor& bench, bool last) {
@@ -428,7 +423,6 @@ caf::behavior poker(caf::stateful_actor<poker_state>* self, uint64_t clients,
       // To make sure that nobody's friendset is empty
       for (const auto& dir : s.directories)
         self->send(dir, befriend_atom::value);
-      // feedback loop?
       for (uint64_t i = 0; i < turns; ++i) {
         auto accu
           = self->spawn(accumulator, self, static_cast<size_t>(clients));
