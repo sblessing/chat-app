@@ -1,10 +1,11 @@
 {application, chatapp,
- [{description, "An escript"},
+ [{description, "The chat-app benchmark in erlang"},
   {vsn, "0.1.0"},
   {registered, []},
   {applications,
    [kernel,
-    stdlib
+    stdlib,
+    getopt
    ]},
   {env,[]},
   {modules, []},
