@@ -283,7 +283,7 @@ def plot(timestamp, results, measured_core_count):
       os.makedirs(os.path.dirname(path), exist_ok=True)
 
       with open(path, "a+") as gnuplot_source:
-        for index, median in enumerate(results[language]):
+        for index, median in enumerate(results[language]["Chat App"]):
           print("%s,%i,%s" % (language, index + 1, median), file=gnuplot_source)
     
     for root, dirs, files in os.walk(basepath):
