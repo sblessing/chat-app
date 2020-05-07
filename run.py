@@ -275,7 +275,7 @@ def plot(timestamp, results, measured_core_count):
     data = json.load(json_file)
 
     for language in results.keys(): 
-      path = basepath + "/chatapp.txt"
+      path = basepath + ("/%.txt") % language
       
       if path not in paths:
         paths.append(path)
