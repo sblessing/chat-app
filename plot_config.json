@@ -1,0 +1,12 @@
+{
+	"colors": {
+	  "newspeak": "#FF0000",
+	  "caf": "#0000FF",
+	  "pony": "#000000"
+	},
+	"versions": {
+		"newspeak": "0.7.0",
+		"caf": "0.17.0",
+		"pony": "0.34.1"
+	}
+}
