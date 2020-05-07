@@ -1,6 +1,5 @@
-chat-app.dSYM
-chat-app
-pony
+*.dSYM
+/pony/pony
 pony.exe
 *.exe
 *.exp
