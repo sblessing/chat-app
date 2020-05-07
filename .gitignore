@@ -1,3 +1,5 @@
+runners/__pycache__
+output/
 *.dSYM
 /pony/pony
 pony.exe
