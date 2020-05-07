@@ -140,6 +140,8 @@ class HardwareThreading:
     return length
   
   def _cpu_file(self, value, core_id = -1, explicit = ""):
+    core = core_id
+    
     if not self._numactl:
       if not explicit:
         try:
@@ -157,10 +159,10 @@ class HardwareThreading:
     else:
       core = core_id if not explicit else int(explicit.replace(self._basepath + "cpu", ""))
       
-      if value == "1":
-        self._cpubind.append(core)
-      else:
-        self._cpubind.remove(core)
+    if value == "1":
+      self._cpubind.append(core)
+    else:
+      self._cpubind.remove(core)
 
   def disable(self, core_id = -1, all = False):
     to_disable = None
