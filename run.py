@@ -326,7 +326,7 @@ def main():
   parser.add_argument('-p', '--plot', dest='plot', action='store_true')
   args = parser.parse_args()
 
-  if os.geteuid() != 0 and args.module:
+  if os.geteuid() != 0 and args.module and not args.numactl:
     print("""
      Running without root privileges. Falling back to `numactl` rather than
      hardware CPU offlining.
