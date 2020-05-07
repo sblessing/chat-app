@@ -183,6 +183,9 @@ class HardwareThreading:
   def get_cpubind(self):
     return self._cpubind
 
+  def get_phys_core_count(self):
+    return len(self._cpus.keys())
+
 class BenchmarkRunner:
   def __init__(self):
     self._name = None

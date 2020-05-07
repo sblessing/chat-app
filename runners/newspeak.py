@@ -1,2 +1,2 @@
-def setup(oBenchmarkRunner, cores, memory):
+def setup(oBenchmarkRunner, cores, phys_cores, memory):
   print("Newspeak!")
