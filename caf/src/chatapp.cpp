@@ -585,6 +585,11 @@ void caf_main(caf::actor_system& system, const config& cfg) {
   if ((cfg.compute + cfg.post + cfg.leave + cfg.invite) != 100) {
     std::cerr << "Invalid arguments! Sum of probabilities != 100." << std::endl;
     return;
+  } else if (cfg.clients < (cfg.directories * 2)) {
+    std::cerr
+      << "Invalid arguments! Clients are not at least twice the directories."
+      << std::endl;
+    return;
   } else {
     auto chat = system.spawn(chatapp, cfg.clients, cfg.turns, cfg.directories,
                              cfg.compute, cfg.post, cfg.leave, cfg.invite,
