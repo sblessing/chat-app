@@ -45,7 +45,7 @@ Chat App: Cross-Language Actor Benchmark
 
         from runners.output_parser import OutputParser
 
-        def setup(oBenchmarkRunner, cores, memory):
+        def setup(oBenchmarkRunner, cores, phys_cores, memory):
           # array of args can be nested
           oBenchmarkRunner.configure("<binary_or_language_name>", "<path_or_executable>", memory, <array_of_args>)
 
