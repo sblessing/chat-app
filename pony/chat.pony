@@ -186,7 +186,7 @@ actor Client
           try created.join(_friends(k)?, accumulator) end
         end
       else
-        // cannot happend
+        // cannot happen
         Fact(false)?
       end
     else
