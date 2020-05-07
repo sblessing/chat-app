@@ -286,30 +286,27 @@ def plot(timestamp, results, measured_core_count):
         for index, median in enumerate(results[language]["Chat App"]):
           print("%s,%i,%s" % (language, index + 1, median), file=gnuplot_source)
     
-    for root, dirs, files in os.walk(basepath):
-      for source in files:
-        sourcefile = os.path.splitext(source)[0]
-        sourcepath = os.path.join(root, source)
-        outfile = "gnuplot_" + source
-        outpath = os.path.join(root, outfile)        
+    outfile = "gnuplot_chatapp.txt"
+    outpath = os.path.join(basepath, outfile)
+    plot_commands = []
 
-        with open(outpath, "w+") as gnuplot_file:
-          write_header_data(sourcepath, sourcefile.replace("_", " "), gnuplot_file, factor)
+    with open(outpath, "w+") as gnuplot_file:
+      write_header_data(os.path.join(basepath, "chatapp.txt"), "Chat App", gnuplot_file, factor)      
 
-          plot_commands = []
+      for language in results.keys():
+        sourcefile = "%s.txt" % language
+        sourcepath = os.path.join(basepath, sourcefile)
+        version = data["versions"][language]
+        color = data["colors"][language]
 
-          for language in results.keys():
-            version = data["versions"][language]
-            color = data["colors"][language]
-
-            plot_commands.append(
-              "'%s\' using 2:(stringcolumn(1) eq \"%s\" ? $3 : 1/0) with %s title '%s %s' lt rgb '%s' lw 2" % 
-                (sourcepath, language, "lines", language, version, color)
-            )
+        plot_commands.append(
+          "'%s\' using 2:(stringcolumn(1) eq \"%s\" ? $3 : 1/0) with %s title '%s %s' lt rgb '%s' lw 2" % 
+          (sourcepath, language, "lines", language, version, color)
+        )
             
-          print("plot " + ",\\\n".join(plot_commands), file=gnuplot_file)
-          gnuplot_file.flush()
-          subprocess.Popen(["gnuplot", outpath]).wait()
+      print("plot " + ",\\\n".join(plot_commands), file=gnuplot_file)
+      gnuplot_file.flush()
+      subprocess.Popen(["gnuplot", outpath]).wait()
       
   for item in os.listdir(basepath):
     if item.endswith(".txt"):
