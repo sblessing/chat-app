@@ -183,8 +183,14 @@ class HardwareThreading:
   def get_cpubind(self):
     return self._cpubind
 
-  def get_phys_core_count(self):
-    return len(self._cpus.keys())
+  def get_online_cores(self):
+    online_cores = []
+
+    for core in self.get_cpubind():
+      if core in self._cpus.keys():
+        online_cores.append(core)
+
+    return online_cores
 
 class BenchmarkRunner:
   def __init__(self):
@@ -360,7 +366,7 @@ def main():
           core_count = core_count + 1
 
           for module in loaded_modules.values():
-            module.setup(runner, core_count, args.memory)
+            module.setup(runner, core_count, len(cores.get_online_cores()), args.memory)
             runner.execute(core_count, cores.get_cpubind())
             pbar.update(1)
     
