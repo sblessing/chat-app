@@ -496,7 +496,7 @@ caf::behavior poker(caf::stateful_actor<poker_state>* self, uint64_t clients,
               result_text << "Turns"
                           << "," << stats.mean() << "," << stats.median() << ","
                           << stats.err() << "," << stats.stddev() << ","
-                          << sample_stats(qos).median() << std::endl;
+                          << sample_stats(qos).median();
             }
 
             const char* separator = parseable ? "," : ": ";
