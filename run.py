@@ -393,7 +393,7 @@ def main():
         cores.enable(all = True)
 
   if args.plot:
-    output = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    output = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(list))))
 
     for root, dirs, files in os.walk("output/"):
       if root != "output/plots":
@@ -401,7 +401,7 @@ def main():
           if file != '.DS_Store' and not file.endswith(".eps"):
             path = os.path.join(root, file)
             components  = path.split("/")
-            output[components[1]][components[1]][int(components[4])][components[3]].append(path)
+            output[components[1]][components[2]][int(components[4])][components[3]].append(path)
     
     for timestamp in output.keys():
       measured_cores.append(max(output[timestamp].keys()))
