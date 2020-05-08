@@ -404,11 +404,10 @@ def main():
             output[components[1]][components[2]][int(components[4])][components[3]].append(path)
     
     for timestamp in output.keys():
-      measured_cores.append(max(output[timestamp].keys()))
-
-      results = defaultdict(lambda: defaultdict(lambda: [0.0] * measured_cores[-1]))
-
       for scenario in output[timestamp].keys():
+        measured_cores.append(max(output[timestamp][scenario].keys()))
+        results = defaultdict(lambda: defaultdict(lambda: [0.0] * measured_cores[-1]))
+
         for core_count in output[timestamp][scenario].keys():
           for language in output[timestamp][scenario][core_count]:
             files = output[timestamp][scenario][core_count][language]
