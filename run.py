@@ -222,13 +222,13 @@ class BenchmarkRunner:
     
     return executables
 
-  def _create_directory(self, cores):
-    path = "output/" + self._timestamp + "/" + self._name + "/" + str(cores)
+  def _create_directory(self, scenario, cores):
+    path = "output/" + self._timestamp + "/" + scenario + "/" + self._name + "/" + str(cores)
     os.makedirs(path, exist_ok=True)
 
     return path + "/"
 
-  def _run_process(self, output, exe, cpubind, args = []):
+  def _run_process(self, output, exe, cpubind, scenario, args = []):
     with open(output + ".txt", "w+") as outputfile:
       if not cpubind:
         command = [exe]
@@ -249,17 +249,17 @@ class BenchmarkRunner:
     self._executables = self._get_executables(path, exclude) 
     self._memory = memory
   
-  def execute(self, cores, cpubind):
-    path = self._create_directory(cores)
+  def execute(self, cores, cpubind, scenario):
+    path = self._create_directory(scenario, cores)
 
     for exe in iter(self._executables):
       if not self._argument_driven:
         output = path + Path(exe).name
-        self._run_process(output, exe, cpubind, self._args)
+        self._run_process(output, exe, cpubind, scenario, self._args)
       else:
         for arg in self._args:
           output = path + basename(normpath(arg[-1]))
-          self._run_process(output, exe, cpubind, args = arg[0] + [arg[-1]])  
+          self._run_process(output, exe, cpubind, scenario, args = arg[0] + [arg[-1]])  
 
 def write_header_data(sourcepath, title, gnuplot_file, factor):
   print("set terminal postscript eps enhanced color", file=gnuplot_file)
@@ -381,8 +381,10 @@ def main():
 
             for module in loaded_modules.values():
               for scenario in args.scenario:
-                module.setup(runner, core_count, len(cores.get_online_cores()), config["scenarios"][scenario], args.memory)
-                runner.execute(core_count, cores.get_cpubind())
+                command = config["scenarios"][scenario]
+
+                module.setup(runner, core_count, len(cores.get_online_cores()), command, args.memory)
+                runner.execute(core_count, cores.get_cpubind(), scenario)
                 pbar.update(1)
     
         cores.enable(all = True)
