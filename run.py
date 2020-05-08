@@ -401,7 +401,7 @@ def main():
           if file != '.DS_Store' and not file.endswith(".eps"):
             path = os.path.join(root, file)
             components  = path.split("/")
-            output[components[1]][int(components[3])][components[2]].append(path)
+            output[components[1]][int(components[4])][components[3]].append(path)
     
     for timestamp in output.keys():
       measured_cores.append(max(output[timestamp].keys()))
