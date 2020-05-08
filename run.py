@@ -383,7 +383,7 @@ def main():
             core_count = core_count + 1
 
             for module in loaded_modules.values():
-              for scenario in args.scenario:
+              for scenario in args.scenarios:
                 command = config["scenarios"][scenario]
 
                 module.setup(runner, core_count, len(cores.get_online_cores()), command, args.memory)
