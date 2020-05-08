@@ -279,8 +279,8 @@ def write_header_data(sourcepath, title, gnuplot_file, factor):
   print("set title \"%s\"" % (title), file=gnuplot_file)
   print("set key outside", file=gnuplot_file) 
 
-def plot(timestamp, results, measured_core_count):
-  basepath = "output/%s/plots" % (timestamp)
+def plot(timestamp, scenario, results, measured_core_count):
+  basepath = "output/%s/%s/plots" % (timestamp, scenario)
   shutil.rmtree(basepath, ignore_errors=True)
   factor = measured_core_count / 64
   paths = []
@@ -408,18 +408,19 @@ def main():
 
       results = defaultdict(lambda: defaultdict(lambda: [0.0] * measured_cores[-1]))
 
-      for core_count in output[timestamp].keys():
-        for language in output[timestamp][core_count]:
-          files = output[timestamp][core_count][language]
+      for scenario in output[timestamp].keys():
+        for core_count in output[timestamp][scenario].keys():
+          for language in output[timestamp][scenario][core_count]:
+            files = output[timestamp][scenario][core_count][language]
 
-          try:
-            module = loaded_modules[language]
-          except KeyError:
-            module = importlib.import_module("." + language, package="runners")
-            loaded_modules[language] = module
+            try:
+              module = loaded_modules[language]
+            except KeyError:
+              module = importlib.import_module("." + language, package="runners")
+              loaded_modules[language] = module
         
-          module.gnuplot(core_count, files, results[language])
+            module.gnuplot(core_count, files, results[language])
     
-      plot(timestamp, results, max(measured_cores))
+        plot(timestamp, scenario, results, max(measured_cores))
 
 if __name__ == "__main__": main()
