@@ -9,6 +9,7 @@ import json
 import shutil
 import statistics
 import numpy as np
+import sys
 from pathlib import Path 
 from tqdm import tqdm
 from os.path import normpath, basename
@@ -339,8 +340,8 @@ def main():
 
   if os.geteuid() != 0 and args.module and not args.numactl:
     print("""
-     Running without root privileges. Falling back to `numactl` rather than
-     hardware CPU offlining.
+      Running without root privileges. Falling back to `numactl` rather than
+      hardware CPU offlining.
     """)
 
     numactl = True
