@@ -67,7 +67,7 @@ class HardwareThreading:
       if "-" in line:
         #numa placement is given by range
         interval = line.split("-")
-        cores = [i for i in range(int(interval[0]), int(interval[1])) if self._hyperthreading or i in self._cpus.keys()]
+        cores = [i for i in range(int(interval[0]), int(interval[1])+1) if self._hyperthreading or i in self._cpus.keys()]
       else:
         #numa placement is given absolute
         cores = sorted([int(i) for i in line.split(",") if self._hyperthreading or int(i) in self._cpus.keys()])
@@ -141,7 +141,7 @@ class HardwareThreading:
   
   def _cpu_file(self, value, core_id = -1, explicit = ""):
     core = core_id
-    
+
     if not self._numactl:
       if not explicit:
         try:
@@ -271,6 +271,8 @@ def write_header_data(sourcepath, title, gnuplot_file, factor):
     print("set xtics %d" % (int(4*factor)), file=gnuplot_file)
   else:
     print("set xtics 8", file=gnuplot_file)
+
+  print("set xrange [4:]", file=gnuplot_file)
 
   print("set datafile separator \",\"", file=gnuplot_file)
   print("set title \"%s\"" % (title), file=gnuplot_file)
