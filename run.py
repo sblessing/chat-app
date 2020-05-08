@@ -329,6 +329,7 @@ def main():
   parser = argparse.ArgumentParser()
   parser.add_argument('-l', '--hyperthreads', dest='hyperthreads', action='store_true')
   parser.add_argument('-r', '--run', dest='module', action='append')
+  parser.add_argument('-s', '--scenario', dest='scenarios', action='append')
   parser.add_argument('-n', '--numactl', dest='numactl', action='store_true')
   parser.add_argument('-m', '--memory', dest='memory', action='store_true')
   parser.add_argument('-p', '--plot', dest='plot', action='store_true')
@@ -350,6 +351,14 @@ def main():
       Running with -m,--memory to measure memory footprints. Execution times
       may be biased and not be reliable.
     """)
+  
+  if not len(args.scenarios):
+    print("""
+      No scenario selected. Please supply -s, --scenario as configured
+      in plot_config.json.
+    """)
+
+    sys.exit(-1)
 
   if args.module:
     for i in args.module:
@@ -357,22 +366,26 @@ def main():
 
     modules = [importlib.import_module("." + i, package="runners") for i in args.module]
 
-    with HardwareThreading(args.hyperthreads, numactl or args.numactl) as cores:
-      cores.disable(all = True)
-      core_count = 0
-      runner = BenchmarkRunner()
+    with open('plot_config.json') as json_file:  
+      config = json.load(json_file)
 
-      with tqdm(total=len(cores)*len(modules)) as pbar:
-        for core in cores:
-          cores.enable(core)
-          core_count = core_count + 1
+      with HardwareThreading(args.hyperthreads, numactl or args.numactl) as cores:
+        cores.disable(all = True)
+        core_count = 0
+        runner = BenchmarkRunner()
 
-          for module in loaded_modules.values():
-            module.setup(runner, core_count, len(cores.get_online_cores()), args.memory)
-            runner.execute(core_count, cores.get_cpubind())
-            pbar.update(1)
+        with tqdm(total=len(cores)*len(modules)*len(args.scenarios)) as pbar:
+          for core in cores:
+            cores.enable(core)
+            core_count = core_count + 1
+
+            for module in loaded_modules.values():
+              for scenario in args.scenario:
+                module.setup(runner, core_count, len(cores.get_online_cores()), config["scenarios"][scenario], args.memory)
+                runner.execute(core_count, cores.get_cpubind())
+                pbar.update(1)
     
-      cores.enable(all = True)
+        cores.enable(all = True)
 
   if args.plot:
     output = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
