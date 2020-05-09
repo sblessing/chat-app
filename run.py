@@ -322,11 +322,9 @@ def plot(timestamp, scenario, results, measured_core_count):
       gnuplot_file.flush()
       subprocess.Popen(["gnuplot", outpath]).wait()
       
-  root = "output/%s" % timestamp
-
-  for item in os.listdir(root):
+  for item in os.listdir(basepath):
     if item.endswith(".txt"):
-       os.remove(os.path.join(root, item))
+       os.remove(os.path.join(basepath, item))
 
 def run(runner, cores, loaded_modules, config, args, core_count, pbar):
   for module in loaded_modules.values():
@@ -395,10 +393,10 @@ def main():
 
       with HardwareThreading(args.hyperthreads, numactl or args.numactl) as cores:
         cores.disable(all = not args.weak)
-        core_count = 0
+        run_count = len(cores)*len(modules)*len(args.scenarios) if not args.weak else len(modules)*len(args.scenarios)
         runner = BenchmarkRunner()
 
-        with tqdm(total=len(cores)*len(modules)*len(args.scenarios)) as pbar:
+        with tqdm(total=run_count) as pbar:
           if(not args.weak):
             run_strong(runner, cores, loaded_modules, config, args, pbar)
           else:
