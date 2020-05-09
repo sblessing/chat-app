@@ -305,7 +305,7 @@ def plot(timestamp, scenario, results, measured_core_count):
     plot_commands = []
 
     with open(outpath, "w+") as gnuplot_file:
-      write_header_data(os.path.join(basepath, "chatapp.txt"), "Chat App", gnuplot_file, factor)      
+      write_header_data(os.path.join(basepath, "chatapp.txt"), "Chat App (%s)" % scenario, gnuplot_file, factor)      
 
       for language in results.keys():
         sourcefile = "%s.txt" % language
