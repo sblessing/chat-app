@@ -322,9 +322,29 @@ def plot(timestamp, scenario, results, measured_core_count):
       gnuplot_file.flush()
       subprocess.Popen(["gnuplot", outpath]).wait()
       
-  for item in os.listdir(basepath):
+  root = "output/%s" % timestamp
+
+  for item in os.listdir(root):
     if item.endswith(".txt"):
-       os.remove(os.path.join(basepath, item))
+       os.remove(os.path.join(root, item))
+
+def run(runner, cores, loaded_modules, config, args, core_count, pbar):
+  for module in loaded_modules.values():
+    for scenario in args.scenarios:
+      command = config["scenarios"][scenario]
+
+      module.setup(runner, core_count, len(cores.get_online_cores()), command, args.memory)
+      runner.execute(core_count, cores.get_cpubind(), scenario)
+      pbar.update(1)
+
+def run_strong(runner, cores, loaded_modules, config, args, pbar):
+  core_count = 0
+
+  for core in cores:
+    cores.enable(core)
+    core_count = core_count + 1
+
+    run(runner, cores, loaded_modules, config, args, core_count, pbar)
 
 def main():
   numactl = False
@@ -334,6 +354,7 @@ def main():
   parser.add_argument('-r', '--run', dest='module', action='append')
   parser.add_argument('-s', '--scenario', dest='scenarios', action='append')
   parser.add_argument('-n', '--numactl', dest='numactl', action='store_true')
+  parser.add_argument('-w', '--weak', dest="weak", action="store_true")
   parser.add_argument('-m', '--memory', dest='memory', action='store_true')
   parser.add_argument('-p', '--plot', dest='plot', action='store_true')
   args = parser.parse_args()
@@ -373,22 +394,15 @@ def main():
       config = json.load(json_file)
 
       with HardwareThreading(args.hyperthreads, numactl or args.numactl) as cores:
-        cores.disable(all = True)
+        cores.disable(all = not args.weak)
         core_count = 0
         runner = BenchmarkRunner()
 
         with tqdm(total=len(cores)*len(modules)*len(args.scenarios)) as pbar:
-          for core in cores:
-            cores.enable(core)
-            core_count = core_count + 1
-
-            for module in loaded_modules.values():
-              for scenario in args.scenarios:
-                command = config["scenarios"][scenario]
-
-                module.setup(runner, core_count, len(cores.get_online_cores()), command, args.memory)
-                runner.execute(core_count, cores.get_cpubind(), scenario)
-                pbar.update(1)
+          if(not args.weak):
+            run_strong(runner, cores, loaded_modules, config, args, pbar)
+          else:
+            None
     
         cores.enable(all = True)
 
