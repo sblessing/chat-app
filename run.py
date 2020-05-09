@@ -355,7 +355,7 @@ def main():
       may be biased and not be reliable.
     """)
   
-  if not args.scenarios:
+  if not args.scenarios and args.module:
     print("""
       No scenario selected. Please supply -s, --scenario as configured
       in plot_config.json.
