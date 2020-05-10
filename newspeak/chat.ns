@@ -10,7 +10,6 @@ class Chat usingPlatform: platform = Value (
   private Vector      = platform kernel Vector.
   (* private IdentitySet = platform collections IdentitySet. *)
 
-  private DiceRoll    = utils DiceRoll.
   private SimpleRand  = utils SimpleRand.
 
   private BenchNoBufferedChats = false.
@@ -22,8 +21,8 @@ class Chat usingPlatform: platform = Value (
     private leave   = self post + leave.
     private invite  = self leave + invite.
   |)(
-    public determineAction: dice = (
-      | pick = dice next. |
+    public determineAction: rand = (
+      | pick = rand nextDiceRoll. |
       pick < compute
         ifTrue: [ ^ #compute ].
       pick < post
@@ -78,7 +77,6 @@ class Chat usingPlatform: platform = Value (
     private chats   <Vector[FarReference[Chat]]>   = Vector new.
     private directory = directory.
     private rand = SimpleRand new: seed.
-    private dice = DiceRoll new: rand.
   |)(
     public befriend: client <FarReference[Client]> = (
       friends append: client
@@ -130,7 +128,7 @@ class Chat usingPlatform: platform = Value (
     public act: behavior accu: accumulator = (
       | b index |
       index:: (rand nextInt: chats size) + 1.
-      b:: behavior determineAction: dice.
+      b:: behavior determineAction: rand.
 
       b = #post ifTrue: [
         | chatsSize = chats size. |

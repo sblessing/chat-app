@@ -33,15 +33,9 @@ class Util usingPlatform: platform = Value ()(
         array at: ceil put: (array at: randI).
         array at: randI put: tmp ]
     )
-  )
 
-  public class DiceRoll new: rand = (
-  | private random = rand. |
-  )(
-    public seed = ( ^ random seed )
-
-    public next = (
-      ^ random nextInt: 100
+    public nextDiceRoll = (
+      ^ nextLong % 100
     )
   )
 )
