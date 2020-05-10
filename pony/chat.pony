@@ -179,21 +179,19 @@ actor Client
         if invitations == 0 then
           invitations = 1
         end
-        
-        accumulator.bump(Invite, invitations)
-  
+          
         for k in Range[USize](0, invitations) do
-          try created.join(_friends(k)?, accumulator) end
+          created.join(_friends(k)?, accumulator)
         end
+
+        accumulator.bump(Invite, invitations)
       else
         // cannot happen
         Fact(false)?
       end
     else
-      try 
-        Assert((_chats.size() == 0) and (_friends.size() > 0))?
-        accumulator.stop(None)
-      end
+      //might be because no friends or no chats
+      accumulator.stop(None)
     end
 
 actor Directory
