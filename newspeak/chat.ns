@@ -310,7 +310,7 @@ class Chat usingPlatform: platform = Value (
 
     public poke: factory accu: accumulator = (
       clients doWithTuple: [:tuple |
-        tuple at: 2 put: ((tuple at: 2) <-: act: factory accu: accumulator) ]
+        (tuple at: 2) <-: act: factory accu: accumulator ]
     )
 
     public disconnect: p = (
