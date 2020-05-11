@@ -383,7 +383,7 @@ class Chat usingPlatform: platform = Value (
     private factory = factory.
     private bench ::= nil.
     private last ::= false.
-    private turnSeries = Vector new.
+    private turnSeries ::= Vector new.
     (*  TODO replace
     private turnSeries = Array new: numTurns. *)
   |)(
@@ -452,21 +452,47 @@ class Chat usingPlatform: platform = Value (
 
         bench <-: complete.
 
-        (* last ifTrue: [
-          finals doIndexes: [:i |
-            | turns |
-            turns:: finals at: i.
-            ].
-           ] *)
+        last ifTrue: [
+          | stats turnValues qos qualityOfService |
+          stats:: SampleStats new: turnSeries.
+          turnSeries:: Vector new: turnSeries size.
+          turnValues:: Vector new.
+          qos:: Vector new.
 
-      '\n\n' println.
-       ('#post:    ' + (actions at: 1)) println.
-       ('#postDel: ' + (actions at: 2)) println.
-       ('#leave:   ' + (actions at: 3)) println.
-       ('#invite:  ' + (actions at: 4)) println.
-       ('#compute: ' + (actions at: 5)) println.
-       ('#ignore:  ' + (actions at: 6)) println.
-       ('#none:    ' + (actions at: 7)) println. ]
+          1 to: turns do: [:k |
+            | kTurnValues |
+            turnValues size < k
+              ifTrue: [
+                kTurnValues:: Vector new.
+                turnValues append: kTurnValues ]
+              ifFalse: [
+                self error: 'unexpected, really'.
+                kTurnValues:: turnValues at: k ].
+
+            finals do: [:iArr |
+              iArr size >= k ifTrue: [
+                kTurnValues append: (iArr at: k) ] ] ].
+
+            turnValues size timesRepeat: [
+              qos append: (SampleStats new: turnValues remove) stddev ].
+
+            qualityOfService:: (SampleStats new: qos) median asString.
+
+            'Turns,' print.
+            stats mean print.       ',' print.
+            stats median print.     ',' print.
+            stats err print.        ',' print.
+            stats stddev print.     ',' print.
+            qualityOfService print.
+            '' println.
+
+            ('Post,'         + (actions at: 1)) println.
+            ('PostDelivery,' + (actions at: 2)) println.
+            ('Leave,'        + (actions at: 3)) println.
+            ('Invite,'       + (actions at: 4)) println.
+            ('Compute,'      + (actions at: 5)) println.
+            ('Ignore,'       + (actions at: 6)) println.
+            ('None,'         + (actions at: 7)) println. ] ]
     )
   )
 
@@ -559,6 +585,52 @@ class Chat usingPlatform: platform = Value (
 
     public asString = (
       notYetImplemented
+    )
+  )
+
+  class SampleStats new: samples = (
+  | private samples = samples.
+  |)(
+    private sum = (
+      | result |
+      result:: 0.
+      samples do: [:s | result:: result + s ].
+      ^ result
+    )
+
+    public mean = (
+      ^ sum // samples size
+    )
+
+    public median = (
+      | middle size |
+      samples isEmpty ifTrue: [ ^ 0.0 ].
+      size:: samples size.
+
+      middle:: size / 2.
+      ^ (size % 2) = 1
+        ifTrue: [ samples at: middle + 1 ]
+        ifFalse: [ ((samples at: middle) + (samples at: middle + 1)) // 2 ]
+    )
+
+    public stddev = (
+      | m temp |
+      m:: mean.
+      temp:: 0.0.
+
+      samples do: [:s |
+        temp:: temp + ((m - s) * (m - s)) ].
+
+      ^ (temp // samples size) sqrt
+    )
+
+    public err = (
+      | m = mean. |
+      ^ 100.0 * ((confidenceHigh - m) // m)
+    )
+
+    private confidenceHigh = (
+      ^ mean + 1.96 * (stddev // samples size sqrt)
     )
   )
 
