@@ -11,7 +11,7 @@
 -behaviour(gen_statem).
 
 %% API
--export([start_link/1]).
+-export([start/6]).
 
 %% gen_statem callbacks
 -export([callback_mode/0, init/1, terminate/3, code_change/4]).
@@ -19,33 +19,67 @@
 -export([running/3]).
 
 %% chat-app events
--export([login/1,befriend/1,poke/3]).
+-export([login/2,befriend/1,poke/3,disconnect/1]).
 
--record(data, {id}).
+-record(data, {id,
+               clients=[],
+               p_compute,
+               p_post,
+               p_leave,
+               p_invite,
+               p_befriend
+              }).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
 
-login(Directory) ->
-    ok.
+login(Directory, ClientId) ->
+    gen_statem:cast(Directory, {login, ClientId}).
 
 befriend(Directory) ->
-    %% non-blocking (use cast)
-    ok.
+    gen_statem:cast(Directory, befriend).
 
 %% Starts a turn
 poke(Directory, Turn, Accumulator) ->
     gen_statem:cast(Directory, {poke, Turn, Accumulator}).
 
-running(cast, {poke, Turn, Accumulator}, Data) ->
-    accumulator:bump(Accumulator, 1),
-    accumulator:stop(Accumulator),
-    keep_state_and_data.
+%% Disconnects directory after an iteration (stops clients)
+disconnect(Directory) ->
+    gen_statem:cast(Directory, disconnect).
+
+running(cast, {login, ClientId},
+        Data=#data{clients=Clients,p_compute=Compute, p_post=Post, p_leave=Leave, p_invite=Invite}) ->
+    {ok, Client} = client:start(ClientId,Compute,Post,Leave,Invite),
+    io:format("Directory: Client ~w is ~w~n", [ClientId, Client]),
+    {keep_state, Data#data{clients=[ Client | Clients ] }};
+running(cast, befriend, _Data=#data{clients=Clients,p_befriend=PBefriend}) ->
+    lists:foreach(
+      fun(C) -> lists:foreach(
+                  fun(F) -> case C /= F andalso rand:uniform(100) < PBefriend of
+                                true -> client:befriend(C, F),
+                                        client:befriend(F, C);
+                                _ -> ok
+                            end
+                  end,
+                  Clients)
+      end,
+      Clients),
+    keep_state_and_data;
+running(cast, {poke, Turn, Accumulator}, Data=#data{id=Id,clients=Clients}) ->
+    %% io:format("Directory ~w getting poked for turn ~w~n", [Id, Turn]),
+    lists:foreach(fun(C) -> client:act(C, Accumulator) end, Clients),
+    keep_state_and_data;
+running(cast, disconnect, Data=#data{id=Id,clients=Clients}) ->
+    %% FIXME this is synchronous; we could send an async call and stop from
+    %% within the client state machine
+    io:format("Directory ~w disconnecting after iteration complete~n", [Id]),
+    lists:foreach(fun client:logout/1, Clients),
+    {keep_state, Data#data{clients=[]}}.
 
 
-start_link(Id) ->
-    gen_statem:start_link(?MODULE, [Id], []).
+start(Id, Compute, Post, Leave, Invite, Befriend) ->
+    gen_statem:start_link(?MODULE, [Id, Compute, Post, Leave, Invite, Befriend], []).
 
 %%%===================================================================
 %%% gen_statem callbacks
@@ -53,10 +87,15 @@ start_link(Id) ->
 
 callback_mode() -> state_functions.
 
-init([Id]) ->
+init([Id, Compute, Post, Leave, Invite, Befriend]) ->
     process_flag(trap_exit, true),
     io:format("Directory ~w starting~n", [Id]),
-    {ok, running, #data{id=Id}}.
+    {ok, running, #data{id=Id,
+                        p_compute=Compute,
+                        p_post=Post,
+                        p_leave=Leave,
+                        p_invite=Invite,
+                        p_befriend=Befriend}}.
 
 terminate(_Reason, _State, _Data) ->
     void.

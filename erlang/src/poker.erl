@@ -19,7 +19,9 @@
 -export([idle/3, running/3]).
 
 %% chat-app events
--export([apply/2,confirm/2]).
+
+%% We add a one-time sync call that confirms final idleness for the Main driver.
+-export([apply/2,sync/1,confirm/2]).
 
 -define(SERVER, ?MODULE).
 
@@ -38,6 +40,11 @@
 %% per iteration."
 apply(Poker, Iteration) ->
     gen_statem:call(Poker, {apply, Iteration}).
+
+%% This returns when the poker is idle; to be called after the last call to
+%% `apply' to make sure the last iteration terminates
+sync(Poker) ->
+    gen_statem:call(Poker, sync).
 
 confirm(Poker, Accumulator) ->
     gen_statem:cast(Poker, {confirm, Accumulator}).
@@ -58,22 +65,29 @@ idle({call, From}, {apply, Iteration},
     %% by ID in a round-robin fashion, the log-in process."  "After [the
     %% initialization], the poker tells the directories to start by
     %% befriending its clients."
-    lists:foreach(fun(I) -> directory:login(lists:nth(I rem NDirectories + 1, Directories)) end,
+    lists:foreach(fun(I) -> directory:login(lists:nth(I rem NDirectories + 1, Directories), I) end,
                   lists:seq(1, NClients)),
     lists:foreach(fun(D) -> directory:befriend(D) end, Directories),
-
     lists:foreach(fun(Turn) ->
-                          {ok, Accumulator}=accumulator:start(self()),
+                          {ok, Accumulator}=accumulator:start(self(), Turn),
+                          accumulator:bump(Accumulator, NClients),
                           lists:foreach(fun(D) -> directory:poke(D, Turn, Accumulator) end, Directories)
                   end,
                   lists:seq(1, Turns)),
-    {next_state, running, Data#data{outstanding_turns=Turns}, [{reply, From, ok}]}.
+    %% Addition to the algorithm described by the paper: since each iteration
+    %% should use its own clients, we have the directories reset their state.
+    lists:foreach(fun directory:disconnect/1, Directories),
+    {next_state, running, Data#data{outstanding_turns=Turns}, [{reply, From, ok}]};
+idle({call, From}, sync, _Data) ->
+    {keep_state_and_data, [{reply, From, ok}]}.
 
 
 
 running({call, _From}, {apply, Iteration}, _Data) ->
     %% Delay until this iteration is finished
     io:format("Poker postponing iteration ~w~n", [Iteration]),
+    {keep_state_and_data, [postpone]};
+running({call, _From}, sync, _Data) ->
     {keep_state_and_data, [postpone]};
 running(cast, {confirm, _Accumulator}, Data=#data{outstanding_turns=Turns}) ->
     case Turns of
@@ -104,7 +118,7 @@ init([Clients, Directories, Turns, Compute, Post, Leave, Invite, Befriend, Parse
     %% poker and its directories are used for the entire ChatApp lifetime, and
     %% thus not destroyed until the end of the benchmark."
     io:format("Poker creating ~w directories~n", [Directories]),
-    D=lists:map(fun(I) -> {ok, Dir}=directory:start_link(I), Dir end,
+    D=lists:map(fun(I) -> {ok, Dir}=directory:start(I, Compute, Post, Leave, Invite, Befriend), Dir end,
                 lists:seq(1, Directories)),
     {ok, idle, #data{
                   n_clients=Clients,
