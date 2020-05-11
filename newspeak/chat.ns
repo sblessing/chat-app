@@ -353,7 +353,7 @@ class Chat usingPlatform: platform = Value (
       expected:: expected - 1.
       expected = 0 ifTrue: [
         end:: system ticks.
-        duration:: end - start.
+        duration:: (end - start) // 1000.0.
         didStop:: true.
 
         (* TODO replace *)
@@ -593,7 +593,7 @@ class Chat usingPlatform: platform = Value (
   |)(
     private sum = (
       | result |
-      result:: 0.
+      result:: 0.0.
       samples do: [:s | result:: result + s ].
       ^ result
     )
@@ -698,7 +698,7 @@ class Chat usingPlatform: platform = Value (
     public complete = (
       endTime:: system ticks.
       running:: false.
-      output report: endTime - startTime.
+      output report: (endTime - startTime) // 1000.0.
       (* ('Total: ' + (endTime - startTime) + 'us') println. *)
       next.
     )
