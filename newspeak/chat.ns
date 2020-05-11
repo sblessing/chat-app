@@ -10,20 +10,104 @@ class Chat usingPlatform: platform = Value (
   private Vector      = platform kernel Vector.
   (* private IdentitySet = platform collections IdentitySet. *)
 
-  private DiceRoll    = utils DiceRoll.
   private SimpleRand  = utils SimpleRand.
 
   private BenchNoBufferedChats = false.
 |
 )(
+  private class IdPromiseVector new: size = Vector new: size (
+  )(
+    public append: id and: promise = (
+      append: {id. promise}
+    )
+
+    public promiseAt: idx = (
+      ^ (at: idx) at: 2
+    )
+
+    private moveUpRemainingAt: i = (
+      lastIdx:: lastIdx - 1.
+      i + 1 to: lastIdx do: [:j |
+        storage at: j - 1 put: (storage at: j) ]
+    )
+
+    public removeById: id <Integer> = (
+      doIndexes: [:i |
+        | tuple = at: i. |
+        (tuple at: 1) = id ifTrue: [
+          moveUpRemainingAt: i.
+          ^ true ] ].
+
+      ^ false
+    )
+
+    public do: block = (
+      super do: [:tuple |
+        block value: (tuple at: 1) with: (tuple at: 2) ]
+    )
+
+    public doWithPromise: block = (
+      super do: [:tuple |
+        block value: (tuple at: 2) ]
+    )
+
+    public doWithTuple: block = (
+      super do: block
+    )
+
+    public println = (
+      'Vector[' print.
+      firstIdx print. ', ' print.
+      lastIdx print. ': ' print.
+      self do: [ :it | '(' print. (it at: 1) print. ':' print. (it at: 2) print. ')' print ].
+      ']' println
+    )
+  ) : (
+    public new = (
+      ^ self new: 10
+    )
+
+    public testRemove = (
+      | vec |
+      vec:: IdPromiseVector new: 10.
+      vec println.
+
+      vec append: 1 and: #a.
+      vec append: 2 and: #b.
+      vec append: 3 and: #c.
+      vec append: 4 and: #d.
+      vec append: 5 and: #e.
+      vec append: 6 and: #f.
+      vec append: 7 and: #g.
+      vec append: 8 and: #h.
+      vec append: 9 and: #j.
+      vec append: 10 and: #k.
+
+      vec println.
+
+      vec removeById: 2.
+
+      vec println.
+
+      vec removeById: 3.
+      vec removeById: 8.
+
+      vec println.
+
+      vec removeById: 10.
+
+      vec println.
+    )
+  )
+
   class BehaviorFactory new: compute post: post leave: leave invite: invite = Value (
   | private compute = compute.
     private post    = self compute + post.
     private leave   = self post + leave.
     private invite  = self leave + invite.
   |)(
-    public determineAction: dice = (
-      | pick = dice next. |
+    public determineAction: rand = (
+      | pick = rand nextDiceRoll. |
       pick < compute
         ifTrue: [ ^ #compute ].
       pick < post
@@ -36,11 +120,13 @@ class Chat usingPlatform: platform = Value (
     )
   )
 
-  class Chat new: initiator = (
-  | members <Vector[FarReference[Client]]> = Vector new.
-    buffer  <Vector[Nil]>                  = Vector new.
+  class Chat new: initiator clientId: initiatorId chatId: chatId = (
+  | private initiatorId = initiatorId.
+    private chatId = chatId.
+    private members <IdPromiseVector[Integer,Promise[Client]]> = IdPromiseVector new.
+    private buffer  <Vector[Nil]>                              = Vector new.
   |
-    members append: initiator.
+    members append: initiatorId and: initiator.
   )(
     public post: payload <Array | nil> accu: accumulator = (
       BenchNoBufferedChats
@@ -50,12 +136,12 @@ class Chat usingPlatform: platform = Value (
         ifTrue: [ accumulator <-: stop: #post ]
         ifFalse: [
           accumulator <-: bump: members size act: #post.
-          members do: [:m |
+          members doWithPromise: [:m |
             m <-: forward: self payload: payload accu: accumulator ] ]
     )
 
-    public join: client accu: accumulator = (
-      members append: client.
+    public join: client <Promise[Client]> id: clientId accu: accumulator = (
+      members append: clientId and: client.
 
       BenchNoBufferedChats ifFalse: [
         buffer size > 0 ifTrue: [
@@ -63,50 +149,51 @@ class Chat usingPlatform: platform = Value (
           buffer do: [:m |
             client <-: forward: self payload: m accu: accumulator ] ] ].
 
-      client <-: accept: self accu: accumulator.
+      client <-: accept: self chatId: chatId accu: accumulator.
     )
 
-    public leave: client didLogout: didLogout accu: accumulator = (
-      members remove: client.
-      client <-: left: self didLogout: didLogout accu: accumulator
+    public leave: client <Promise[Client]> clientId: clientId <Integer> didLogout: didLogout accu: accumulator = (
+      | removed |
+      removed:: members removeById: clientId.
+      client <-: left: chatId didLogout: didLogout accu: accumulator
     )
   )
 
   class Client create: id dir: directory seed: seed = (
   | private id = id.
-    private friends <Vector[FarReference[Client]]> = Vector new.
-    private chats   <Vector[FarReference[Chat]]>   = Vector new.
+    private friends <IdPromiseVector[Integer,Promise[Client]]> = IdPromiseVector new.
+    private chats   <IdPromiseVector[Integer,Promise[Chat]]>   = IdPromiseVector new.
     private directory = directory.
     private rand = SimpleRand new: seed.
-    private dice = DiceRoll new: rand.
+    private nextChatId ::= 0.
   |)(
-    public befriend: client <FarReference[Client]> = (
-      friends append: client
+    public befriend: client <Promise[Client]> clientId: friendId = (
+      friends append: friendId and: client
     )
 
     public logout = (
       chats isEmpty
         ifTrue: [
           (* TODO: should I avoid using IDs, is this allowed? *)
-          directory <-: left: self.
+          directory <-: left: id.
           ^ self ].
 
-      chats do: [:c |
-        c <-: leave: self didLogout: true accu: nil ]
+      chats doWithPromise: [:c |
+        c <-: leave: self clientId: id didLogout: true accu: nil ]
     )
 
-    public left: chat <FarReference[Chat]> didLogout: didLogout accu: accumulator = (
-      chats remove: chat.
+    public left: chatId didLogout: didLogout accu: accumulator = (
+      chats removeById: chatId.
 
       (chats isEmpty and: [ didLogout ])
-        ifTrue: [ directory <-: left: self ]
+        ifTrue: [ directory <-: left: id ]
         ifFalse: [
           accumulator == nil ifFalse: [
             accumulator <-: stop: #leave ] ]
     )
 
-    public accept: chat <FarReference[Chat]> accu: accumulator = (
-      chats append: chat.
+    public accept: chat <Promise[Chat]> chatId: chatId accu: accumulator = (
+      chats append: chatId and: chat.
       accumulator <-: stop: #ignore
     )
 
@@ -130,14 +217,14 @@ class Chat usingPlatform: platform = Value (
     public act: behavior accu: accumulator = (
       | b index |
       index:: (rand nextInt: chats size) + 1.
-      b:: behavior determineAction: dice.
+      b:: behavior determineAction: rand.
 
       b = #post ifTrue: [
         | chatsSize = chats size. |
         chatsSize = 0 ifTrue: [
           accumulator <-: stop: #none.
           ^ self ].
-        (chats at: index) <-: post: nil accu: accumulator.
+        (chats promiseAt: index) <-: post: nil accu: accumulator.
         ^ self ].
 
       b = #leave ifTrue: [
@@ -146,7 +233,7 @@ class Chat usingPlatform: platform = Value (
           accumulator <-: stop: #none.
           ^ self ].
 
-        (chats at: index) <-: leave: self didLogout: false accu: accumulator.
+        (chats promiseAt: index) <-: leave: self clientId: id didLogout: false accu: accumulator.
         ^ self ].
 
       b = #compute ifTrue: [
@@ -156,8 +243,10 @@ class Chat usingPlatform: platform = Value (
         ^ self ].
 
       b = #invite ifTrue: [
-        | createdP <Promise[Chat]> = (actors createActorFromValue: Chat) <-: new: self.
-          f i invitations |
+        | createdP <Promise[Chat]> f i invitations chatId |
+        nextChatId:: nextChatId + 1.
+        chatId:: (id << 20) + nextChatId.
+        createdP:: (actors createActorFromValue: Chat) <-: new: self clientId: id chatId: chatId.
         f:: friends asArray.
 
         rand shuffle: f.
@@ -171,12 +260,11 @@ class Chat usingPlatform: platform = Value (
 
         accumulator <-: bump: invitations act: #invite.
 
-        createdP whenResolved: [:created |
-          chats append: created ].
+        chats append: chatId and: createdP.
 
         1 to: invitations do: [:i |
           | k = f at: i. |
-          createdP <-: join: k accu: accumulator ].
+          createdP <-: join: (k at: 2) id: (k at: 1) accu: accumulator ].
         ^ self ].
 
       (* else *)
@@ -185,7 +273,7 @@ class Chat usingPlatform: platform = Value (
   )
 
   class Directory new: seed with: befriend = (
-  | private clients <Vector[FarReference[Client]]> = Vector new.
+  | private clients <IdPromiseVector[Integer,Promise[Client]]> = IdPromiseVector new.
     private random = SimpleRand new: seed.
     private numBefriends = befriend.
     private completions ::= 0.
@@ -193,21 +281,25 @@ class Chat usingPlatform: platform = Value (
   |)(
     public login: id = (
       | newClient = (actors createActorFromValue: Client) <-: create: id dir: self seed: random next. |
-      ^ newClient whenResolved: [:nc |
-        clients append: nc ]
+      clients append: id and: newClient
     )
 
     public befriend = (
-      clients do: [:friend |
-        clients do: [:client |
-          ((random nextInt: 100) < numBefriends and: [friend ~= client])
-            ifTrue: [
-              client <-: befriend: friend.
-              friend <-: befriend: client ] ] ]
+      clients do: [:fId :friend |
+        | madeFriends |
+        madeFriends:: false.
+
+        [madeFriends] whileFalse: [
+          clients do: [:cId :client |
+            ((random nextInt: 100) < numBefriends and: [fId <> cId])
+              ifTrue: [
+                madeFriends:: true.
+                client <-: befriend: friend clientId: fId.
+                friend <-: befriend: client clientId: cId ] ] ] ]
     )
 
-    public left: client <FarReference[Client]> = (
-      clients remove: client.
+    public left: clientId <Integer> = (
+      clients removeById: clientId.
 
       clients isEmpty ifTrue: [
         clients removeAll.
@@ -217,14 +309,14 @@ class Chat usingPlatform: platform = Value (
     )
 
     public poke: factory accu: accumulator = (
-      clients do: [:client |
-        client <-: act: factory accu: accumulator ]
+      clients doWithTuple: [:tuple |
+        (tuple at: 2) <-: act: factory accu: accumulator ]
     )
 
     public disconnect: p = (
       poker:: p.
 
-      clients do: [:client |
+      clients doWithPromise: [:client |
         client <-: logout ]
     )
   )
@@ -283,7 +375,7 @@ class Chat usingPlatform: platform = Value (
     private turns ::= numTurns.
     private iteration ::= 1.
     private rand = SimpleRand new: 42.
-    private directories = Array new: dirs withAll: [
+    private directories <Promise[Directory]> = Array new: dirs withAll: [
       (actors createActorFromValue: Directory) <-: new: rand next with: befriend ].
     private runtimes ::= Vector new.
     private accumulations ::= 0.
