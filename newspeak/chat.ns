@@ -686,7 +686,7 @@ class Chat usingPlatform: platform = Value (
 
           startTime:: system ticks.
 
-          'Runner.run: ' print. iterations println.
+          (* 'Runner.run: ' print. iterations println. *)
 
           benchmark run: self isLast: iterations = 1.
           iterations:: iterations - 1.
@@ -699,7 +699,7 @@ class Chat usingPlatform: platform = Value (
       endTime:: system ticks.
       running:: false.
       output report: endTime - startTime.
-      ('Total: ' + (endTime - startTime) + 'us') println.
+      (* ('Total: ' + (endTime - startTime) + 'us') println. *)
       next.
     )
   )
@@ -715,7 +715,7 @@ class Chat usingPlatform: platform = Value (
     system exit: 0.*)
 
     cfg:: Config new: args.
-    cfg print.
+    (* cfg print. *)
     runner:: (actors createActorFromValue: Runner) <-: new: cfg.
     ^ (runner <-: start: 32)
   )
