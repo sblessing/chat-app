@@ -238,7 +238,9 @@ class BenchmarkRunner:
 
       if self._memory:
         command = ["/usr/bin/time", "-f", "%M KB"] + command
-        
+      
+      print(command + args)
+
       with open(output + "_memory.txt", "w+") as memorylog:     
         bench = subprocess.Popen(command  + args, stdout=outputfile, stderr=memorylog)   
         bench.wait()
@@ -258,9 +260,8 @@ class BenchmarkRunner:
         output = path + Path(exe).name
         self._run_process(output, exe, cpubind, scenario, self._args)
       else:
-        for arg in self._args:
-          output = path + basename(normpath(arg[-1]))
-          self._run_process(output, exe, cpubind, scenario, args = arg[0] + [arg[-1]])  
+        output = path + basename(normpath(self._args[0]))
+        self._run_process(output, exe, cpubind, scenario, args = [self._args[0]] + self._args[-1])  
 
 def write_header_data(sourcepath, title, gnuplot_file, factor):
   print("set terminal postscript eps enhanced color", file=gnuplot_file)
