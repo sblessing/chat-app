@@ -229,18 +229,16 @@ class BenchmarkRunner:
 
     return path + "/"
 
-  def _run_process(self, output, exe, cpubind, scenario, args = []):
+  def _run_process(self, output, exe, cpubind, scenario, args = [], command_args = []):
     with open(output + ".txt", "w+") as outputfile:
       if not cpubind:
-        command = [exe]
+        command = [exe] + command_args
       else:
-        command = ["numactl", "--physcpubind=" + ",".join(str(i) for i in cpubind), "--", exe]
+        command = ["numactl", "--physcpubind=" + ",".join(str(i) for i in cpubind), "--", exe] + command_args
 
       if self._memory:
         command = ["/usr/bin/time", "-f", "%M KB"] + command
       
-      print(command + args)
-
       with open(output + "_memory.txt", "w+") as memorylog:     
         bench = subprocess.Popen(command  + args, stdout=outputfile, stderr=memorylog)   
         bench.wait()
@@ -261,7 +259,9 @@ class BenchmarkRunner:
         self._run_process(output, exe, cpubind, scenario, self._args)
       else:
         output = path + basename(normpath(self._args[1][0]))
-        self._run_process(output, exe + " " + self._args[0][0], cpubind, scenario, args = [self._args[1][0]] + self._args[1][-1])  
+        self._run_process(output, exe, cpubind, scenario, 
+          args = [self._args[1][0]] + self._args[1][-1],
+          command_args = self._args[0])  
 
 def write_header_data(sourcepath, title, gnuplot_file, factor):
   print("set terminal postscript eps enhanced color", file=gnuplot_file)
