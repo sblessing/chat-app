@@ -221,58 +221,76 @@ class Chat usingPlatform: platform = Value (
         ifFalse: [ ^ ((fibJ * 2) + fibI) * ((fibJ * 2) - fibI) - 2 ]
     )
 
+    private post: index accu: accumulator = (
+      | chatsSize = chats size. |
+      chatsSize = 0 ifTrue: [
+        accumulator <-: stop: #none.
+        ^ self ].
+      (chats promiseAt: index) <-: post: nil accu: accumulator.
+      #noPromise
+    )
+
+    private leave: index accu: accumulator = (
+      | chatsSize = chats size. |
+      chatsSize = 0 ifTrue: [
+        accumulator <-: stop: #none.
+        ^ self ].
+
+      (chats promiseAt: index) <-: leave: self clientId: id didLogout: false accu: accumulator.
+      #noPromise
+    )
+
+    private compute: accumulator = (
+      fibonacci: 35.
+      accumulator <-: stop: #compute.
+      #noPromise
+    )
+
+    private invite: accumulator = (
+      | createdP <Promise[Chat]> f i invitations chatId |
+      nextChatId:: nextChatId + 1.
+      chatId:: (id << 20) + nextChatId.
+      createdP:: (actors createActorFromValue: Chat) <-: new: self clientId: id chatId: chatId.
+      f:: friends asArray.
+
+      rand shuffle: f.
+
+      invitations:: friends size > 0
+        ifTrue: [ rand next % friends size ]
+        ifFalse: [ 0 ].
+
+      invitations = 0 ifTrue: [
+        invitations:: 1 ].
+
+      accumulator <-: bump: invitations act: #invite.
+
+      chats append: chatId and: createdP.
+
+      1 to: invitations do: [:i |
+        | k = f at: i. |
+        createdP <-: join: (k at: 2) id: (k at: 1) accu: accumulator.
+        #noPromise ].
+    )
+
     public act: behavior accu: accumulator = (
       | b index |
       index:: (rand nextInt: chats size) + 1.
       b:: behavior determineAction: rand.
 
       b = #post ifTrue: [
-        | chatsSize = chats size. |
-        chatsSize = 0 ifTrue: [
-          accumulator <-: stop: #none.
-          ^ self ].
-        (chats promiseAt: index) <-: post: nil accu: accumulator.
+        post: index accu: accumulator.
         ^ self ].
 
       b = #leave ifTrue: [
-        | chatsSize = chats size. |
-        chatsSize = 0 ifTrue: [
-          accumulator <-: stop: #none.
-          ^ self ].
-
-        (chats promiseAt: index) <-: leave: self clientId: id didLogout: false accu: accumulator.
+        leave: index accu: accumulator.
         ^ self ].
 
       b = #compute ifTrue: [
-        (* TODO: make sure this is not optimized out *)
-        fibonacci: 35.
-        accumulator <-: stop: #compute.
+        compute: accumulator.
         ^ self ].
 
       b = #invite ifTrue: [
-        | createdP <Promise[Chat]> f i invitations chatId |
-        nextChatId:: nextChatId + 1.
-        chatId:: (id << 20) + nextChatId.
-        createdP:: (actors createActorFromValue: Chat) <-: new: self clientId: id chatId: chatId.
-        f:: friends asArray.
-
-        rand shuffle: f.
-
-        invitations:: friends size > 0
-          ifTrue: [ rand next % friends size ]
-          ifFalse: [ 0 ].
-
-        invitations = 0 ifTrue: [
-          invitations:: 1 ].
-
-        accumulator <-: bump: invitations act: #invite.
-
-        chats append: chatId and: createdP.
-
-        1 to: invitations do: [:i |
-          | k = f at: i. |
-          createdP <-: join: (k at: 2) id: (k at: 1) accu: accumulator.
-          #noPromise ].
+        invite: accumulator.
         ^ self ].
 
       (* else *)
