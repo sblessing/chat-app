@@ -18,9 +18,16 @@
 -export([running/3]).
 
 %% Events sent by directory
--export([befriend/2,act/2,logout/1]).
+-export([befriend/2,act/3,logout/1]).
 
--record(data, {id,accumulator,friends=[],chats=[],
+%% Events sent by chat
+-export([forward/3,left/3]).
+
+-record(data, {id,accumulator,
+               %% an ordset is a list that is kept ordered, therefore we don’t
+               %% break the benchmark rules
+               friends=ordsets:new(),
+               chats=[],
                p_compute,
                p_post,
                p_leave,
@@ -31,17 +38,23 @@
 %%% API
 %%%===================================================================
 
+start(Id,Compute,Post,Leave,Invite) ->
+    gen_statem:start(?MODULE, [Id,Compute,Post,Leave,Invite], []).
+
 logout(Client) ->
     gen_statem:cast(Client, logout).
 
 befriend(Client, Friend) ->
     gen_statem:cast(Client, {befriend, Friend}).
 
-act(Client,Accumulator) ->
-    gen_statem:cast(Client, {act,Accumulator}).
+act(Client, Turn, Accumulator) ->
+    gen_statem:cast(Client, {act, Turn, Accumulator}).
 
-start(Id,Compute,Post,Leave,Invite) ->
-    gen_statem:start(?MODULE, [Id,Compute,Post,Leave,Invite], []).
+forward(Client, Message, Accumulator) ->
+    gen_statem:cast(Client, {forward, Message, Accumulator}).
+
+left(Client, Chat, Accumulator) ->
+    gen_statem:cast(Client, {left, Chat, Accumulator}).
 
 %%%===================================================================
 %%% gen_statem callbacks
@@ -50,7 +63,6 @@ start(Id,Compute,Post,Leave,Invite) ->
 callback_mode() -> state_functions.
 
 init([Id,Compute,Post,Leave,Invite]) ->
-    %% io:format("Client ~w starting~n", [Id]),
     {ok, running, #data{id=Id,
                         p_compute=Compute,
                         p_post=Post,
@@ -59,40 +71,62 @@ init([Id,Compute,Post,Leave,Invite]) ->
                        }}.
 
 running(cast, {befriend, Friend}, Data=#data{friends=Friends}) ->
-    {keep_state, Data#data{friends=[Friend | Friends]}};
-running(cast, {act, Accumulator},
-        _Data=#data{id=Id,friends=Friends,chats=Chats,
-                    p_compute=Compute, p_post=Post, p_leave=Leave, p_invite=_Invite}) ->
+    %% an ordset is a list that is kept ordered, therefore we don’t break the
+    %% benchmark rules
+    {keep_state, Data#data{friends=ordsets:add_element(Friend, Friends)}};
+running(cast, {act, Turn, Accumulator},
+        Data=#data{id=Id,friends=Friends,chats=Chats,
+                   p_compute=Compute, p_post=Post, p_leave=Leave, p_invite=_Invite}) ->
     Act=rand:uniform(100),
     case Act of
         _ when Act < Compute ->
-            io:format("Client ~w starting a compute~n", [Id]),
-            Result=compute(),
-            io:format("Client ~w did a compute with result ~w~n", [Id, Result]),
-            accumulator:stop(Accumulator);
+            %% Compute
+            compute(),
+            accumulator:stop(Accumulator, {client, compute}),
+            keep_state_and_data;
         _ when Act < Compute + Post ->
-            io:format("Client ~w doing a post~n", [Id]),
+            %% Post
             case Chats of
-                [] -> ok;                       % bump accumulator
-                _ -> ok                         % send msg to random chat
+                [] -> accumulator:stop(Accumulator, {client, post});
+                _ -> chat:post(lists:nth(rand:uniform(length(Chats)), Chats), self(), {Id, Turn}, Accumulator)
             end,
-            accumulator:stop(Accumulator);
+            keep_state_and_data;
         _ when Act < Compute + Post + Leave ->
-            io:format("Client ~w doing a leave~n", [Id]),
-            ok,                        % leave action here
-            accumulator:stop(Accumulator);
+            %% Leave
+            case Chats of
+                [] -> accumulator:stop(Accumulator, {client, leave, empty});
+                _ ->
+                    %% the chat will call back with a `left' message; state
+                    %% update and accumulator:stop are done there
+                    chat:leave(lists:nth(rand:uniform(length(Chats)), Chats), self(), Accumulator)
+                 end,
+            keep_state_and_data;
         _ ->                           % Compute + Post + Leave + Invite = 100
-            io:format("Client ~w doing a invite~n", [Id]),
-            ok,                         % invite action here
-            accumulator:stop(Accumulator)
-    end,
+            %% Invite
+            {ok, Chat}=chat:start(self()),
+            %% pony shuffles the friends list and takes a prefix of random
+            %% length, we take each element with 50% probability
+            Inviteds=case L=lists:filter(fun(_) -> rand:uniform(2) == 1 end, Friends) of
+                         [] -> [lists:nth(rand:uniform(length(Friends)), Friends)];
+                         _ -> L
+                     end,
+            accumulator:bump(Accumulator, length(Inviteds)),
+            lists:foreach(fun(I) -> chat:join(Chat, I, Accumulator) end, Inviteds),
+            accumulator:stop(Accumulator, {client, invite}),
+            {keep_state, Data#data{chats=[Chat | Chats]}}
+    end;
+running(cast, {forward, _Message, Accumulator}, _Data=#data{id=_Id}) ->
+    io:format("Client ~w (~w) receiving message ~w~n", [_Id, self(), _Message]),
+    accumulator:stop(Accumulator, {client, forward}),
     keep_state_and_data;
-running(cast, logout, _Data=#data{id=Id}) ->
-    %% io:format("Client ~w being told to logout~n", [Id]),
+running(cast, {left, Chat, Accumulator}, Data=#data{chats=Chats}) ->
+    accumulator:stop(Accumulator, {client, left}),
+    { keep_state, Data#data{chats=lists:delete(Chat, Chats)} };
+running(cast, logout, _Data=#data{id=_Id}) ->
+    io:format("Client ~w (~w) being told to logout~n", [_Id, self()]),
     {stop, normal}.
 
-terminate(_Reason, _State, _Data=#data{id=Id}) ->
-    %% io:format("Client ~w stopping~n", [Id]),
+terminate(_Reason, _State, _Data=#data{id=_Id}) ->
     void.
 
 code_change(_OldVsn, State, Data, _Extra) ->

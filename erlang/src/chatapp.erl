@@ -3,8 +3,6 @@
 %% API exports
 -export([main/1]).
 
--compile(export_all).
-
 %%====================================================================
 %% API functions
 %%====================================================================
@@ -24,18 +22,18 @@ main(Args) ->
          {befriend, $b, "befriend", {integer, 10}, "Probability of befriending"},
          {parseable, $s, "parseable", {boolean, false}, "Generate parseable output"}
         ],
-    case Parsed=getopt:parse(OptSpecList, Args) of
+    case getopt:parse(OptSpecList, Args) of
         {ok, {Options, []}} ->
             io:format("Options: ~w~n", [Options]),
-            {ok, Poker}=poker:start_link(proplists:get_value(clients,Options),
-                                         proplists:get_value(directories,Options),
-                                         proplists:get_value(turns,Options),
-                                         proplists:get_value(compute,Options),
-                                         proplists:get_value(post,Options),
-                                         proplists:get_value(leave,Options),
-                                         proplists:get_value(invite,Options),
-                                         proplists:get_value(befriend,Options),
-                                         proplists:get_value(parseable,Options)),
+            {ok, Poker}=poker:start(proplists:get_value(clients,Options),
+                                    proplists:get_value(directories,Options),
+                                    proplists:get_value(turns,Options),
+                                    proplists:get_value(compute,Options),
+                                    proplists:get_value(post,Options),
+                                    proplists:get_value(leave,Options),
+                                    proplists:get_value(invite,Options),
+                                    proplists:get_value(befriend,Options),
+                                    proplists:get_value(parseable,Options)),
             lists:foreach(fun(I) -> poker:apply(Poker, I) end,
                           lists:seq(1, proplists:get_value(iterations,Options))),
             poker:sync(Poker),

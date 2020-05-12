@@ -11,7 +11,7 @@
 -behaviour(gen_statem).
 
 %% API
--export([start_link/9]).
+-export([start/9]).
 
 %% gen_statem callbacks
 -export([callback_mode/0, init/1, terminate/3, code_change/4]).
@@ -53,32 +53,18 @@ confirm(Poker, Accumulator) ->
 
 idle({call, From}, {apply, Iteration},
      Data=#data{n_turns=Turns,directories=Directories,n_directories=NDirectories,n_clients=NClients}) ->
-
-    %% "Without waiting for the completion of the
-    %% befriending process, the turns are initiated. Turns themselves have no
-    %% dependency between each other despite the causal relationship of
-    %% messages that start a turn. Each turn k is related to a single
-    %% accumulator 𝛼𝑘 which is responsible for telemetry and turn completion
-    %% detection. Eventually, all accumulators report to the poker that their
-    %% respective turns have finished,"
     io:format("Poker starting iteration ~w~n", [Iteration]),
-
-    %% "At the start of an iteration the poker assigns clients to directories
-    %% by ID in a round-robin fashion, the log-in process."  "After [the
-    %% initialization], the poker tells the directories to start by
-    %% befriending its clients."
+    %% Create clients
     lists:foreach(fun(I) -> directory:login(lists:nth(I rem NDirectories + 1, Directories), I) end,
                   lists:seq(1, NClients)),
+    %% Initiate befriend phase
     lists:foreach(fun(D) -> directory:befriend(D) end, Directories),
+    %% Send n turns (all at once, no waiting)
     lists:foreach(fun(Turn) ->
-                          {ok, Accumulator}=accumulator:start(self(), Turn),
-                          accumulator:bump(Accumulator, NClients),
+                          {ok, Accumulator}=accumulator:start(self(), Iteration, Turn, NClients),
                           lists:foreach(fun(D) -> directory:poke(D, Turn, Accumulator) end, Directories)
                   end,
                   lists:seq(1, Turns)),
-    %% Addition to the algorithm described by the paper: since each iteration
-    %% should use its own clients, we have the directories reset their state.
-    lists:foreach(fun directory:disconnect/1, Directories),
     {next_state, running, Data#data{outstanding_turns=Turns}, [{reply, From, ok}]};
 idle({call, From}, sync, _Data) ->
     {keep_state_and_data, [{reply, From, ok}]}.
@@ -86,26 +72,28 @@ idle({call, From}, sync, _Data) ->
 
 
 running({call, _From}, {apply, Iteration}, _Data) ->
-    %% Delay until this iteration is finished
+    %% Delay next iteration until previous one finished
     io:format("Poker postponing iteration ~w~n", [Iteration]),
     {keep_state_and_data, [postpone]};
 running({call, _From}, sync, _Data) ->
     {keep_state_and_data, [postpone]};
-running(cast, {confirm, _Accumulator}, Data=#data{outstanding_turns=Turns}) ->
+running(cast, {confirm, _Accumulator},
+        Data=#data{outstanding_turns=Turns,directories=Directories}) ->
+    %% Accept out-of-order confirmation of accumulators; only keep track how
+    %% many turns still outstanding
     case Turns of
         1 ->
             io:format("Poker finishing iteration~n"),
+            lists:foreach(fun directory:disconnect/1, Directories),
             {next_state, idle, Data#data{outstanding_turns=0}};
         _ -> {keep_state, Data#data{outstanding_turns=Turns - 1}}
-    end;
-running({call,Caller}, _Msg, Data) ->
-    {next_state, running, Data, [{reply,Caller,ok}]}.
+    end.
 
 
-start_link(Clients, Directories, Turns, Compute, Post, Leave, Invite, Befriend, Parseable) ->
-    gen_statem:start_link({local, ?SERVER}, ?MODULE,
-                          [Clients, Directories, Turns, Compute, Post, Leave, Invite, Befriend, Parseable],
-                          []).
+start(Clients, Directories, Turns, Compute, Post, Leave, Invite, Befriend, Parseable) ->
+    gen_statem:start({local, ?SERVER}, ?MODULE,
+                     [Clients, Directories, Turns, Compute, Post, Leave, Invite, Befriend, Parseable],
+                     []).
 
 %%%===================================================================
 %%% gen_statem callbacks
@@ -114,11 +102,6 @@ start_link(Clients, Directories, Turns, Compute, Post, Leave, Invite, Befriend, 
 callback_mode() -> state_functions.
 
 init([Clients, Directories, Turns, Compute, Post, Leave, Invite, Befriend, Parseable]) ->
-    process_flag(trap_exit, true),
-    %% "The poker is instantiated with the CLI options mentioned above. Upon
-    %% instantiation, it creates the requested amount of directories. These
-    %% poker and its directories are used for the entire ChatApp lifetime, and
-    %% thus not destroyed until the end of the benchmark."
     io:format("Poker creating ~w directories~n", [Directories]),
     D=lists:map(fun(I) -> {ok, Dir}=directory:start(I, Compute, Post, Leave, Invite, Befriend), Dir end,
                 lists:seq(1, Directories)),
@@ -132,7 +115,6 @@ init([Clients, Directories, Turns, Compute, Post, Leave, Invite, Befriend, Parse
                   p_invite=Invite,
                   p_befriend=Befriend,
                   parseable=Parseable,
-
                   directories=D
                  }}.
 

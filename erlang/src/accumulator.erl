@@ -11,43 +11,47 @@
 -behaviour(gen_statem).
 
 %% API
--export([start/2]).
+-export([start/4]).
 
 %% gen_statem callbacks
 -export([callback_mode/0, init/1, terminate/3, code_change/4]).
 -export([running/3]).
 
 %% chat-app events
--export([stop/1,bump/2]).
+-export([stop/2,bump/2]).
 
--record(data, {count=0,poker,turn}).
+-record(data, {count=0,poker,iteration,turn}).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
 
-start(Poker, Turn) ->
-    gen_statem:start(?MODULE, [Poker, Turn], []).
+start(Poker, Iteration, Turn, NClients) ->
+    gen_statem:start(?MODULE, [Poker, Iteration, Turn, NClients], []).
 
 
 bump(Accumulator, Amount) ->
-    gen_statem:cast(Accumulator, {bump, Amount}).
+    gen_statem:call(Accumulator, {bump, Amount}).
 
-stop(Accumulator) ->
-    gen_statem:cast(Accumulator, stop).
+stop(Accumulator, Action) ->
+    gen_statem:cast(Accumulator, {stop, Action}).
 
 
-running(cast, {bump, Amount}, Data=#data{count=Count,turn=Turn}) ->
-    %% io:format("Accumulator for turn ~w getting bumped by ~w at ~w~n", [Turn, Amount, Count]),
-    {keep_state, Data#data{count=Count + Amount}};
-running(cast, stop, Data=#data{poker=Poker,count=Count,turn=Turn}) ->
+running({call, From}, {bump, Amount}, Data=#data{count=Count,turn=_Turn}) ->
+    {keep_state, Data#data{count=Count + Amount}, {reply, From, ok}};
+running(cast, {stop, Action}, Data=#data{poker=Poker,count=Count,iteration=Iteration,turn=Turn}) ->
     case Count of
+        0 ->
+            %% This is for diagnostic purposes; change the return value of the
+            %% `1' case below to activate this branch
+            io:format("*** Accumulator for iteration ~w turn ~w got surplus stop signal with action ~w~n", [Iteration, Turn, Action]),
+            keep_state_and_data;
         1 ->
-            %% io:format("Accumulator for turn ~w stopped at ~w, sending confirmation to poker~n", [Turn, Count]),
+            io:format("Accumulator for iteration ~w turn ~w stopped at ~w, sending confirmation to poker~n", [Iteration, Turn, Count]),
             poker:confirm(Poker, self()),
             {stop, normal};
+            %% {keep_state, Data#data{count=0}};
         _ ->
-            %% io:format("Accumulator for turn ~w getting stopped at ~w~n", [Turn, Count]),
             {keep_state, Data#data{count=Count - 1}}
     end.
 
@@ -57,9 +61,9 @@ running(cast, stop, Data=#data{poker=Poker,count=Count,turn=Turn}) ->
 
 callback_mode() -> state_functions.
 
-init([Poker, Turn]) ->
-    process_flag(trap_exit, true),
-    {ok, running, #data{count=0,poker=Poker,turn=Turn}}.
+init([Poker, Iteration, Turn, NClients]) ->
+    io:format("Accumulator starting for iteration ~w, turn ~w~n", [Iteration, Turn]),
+    {ok, running, #data{count=NClients,poker=Poker,iteration=Iteration,turn=Turn}}.
 
 terminate(_Reason, _State, _Data) ->
     void.

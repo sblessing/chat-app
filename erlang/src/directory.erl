@@ -51,28 +51,34 @@ disconnect(Directory) ->
 running(cast, {login, ClientId},
         Data=#data{clients=Clients,p_compute=Compute, p_post=Post, p_leave=Leave, p_invite=Invite}) ->
     {ok, Client} = client:start(ClientId,Compute,Post,Leave,Invite),
-    io:format("Directory: Client ~w is ~w~n", [ClientId, Client]),
     {keep_state, Data#data{clients=[ Client | Clients ] }};
 running(cast, befriend, _Data=#data{clients=Clients,p_befriend=PBefriend}) ->
     lists:foreach(
-      fun(C) -> lists:foreach(
-                  fun(F) -> case C /= F andalso rand:uniform(100) < PBefriend of
-                                true -> client:befriend(C, F),
-                                        client:befriend(F, C);
-                                _ -> ok
-                            end
-                  end,
-                  Clients)
+      fun(C) ->
+              %% Make sure that each client has at least one friend.
+              FirstFriendIndex=rand:uniform(length(Clients)-1),
+              FirstFriend=case FF=lists:nth(FirstFriendIndex, Clients) of
+                              C -> lists:nth(FirstFriendIndex+1, Clients);
+                              _ -> FF
+                          end,
+              client:befriend(C, FirstFriend),
+              client:befriend(FirstFriend, C),
+              lists:foreach(
+                fun(F) -> case C /= F andalso rand:uniform(100) < PBefriend of
+                              true -> client:befriend(C, F),
+                                      client:befriend(F, C);
+                              _ -> ok
+                          end
+                end,
+                Clients)
       end,
       Clients),
     keep_state_and_data;
-running(cast, {poke, Turn, Accumulator}, Data=#data{id=Id,clients=Clients}) ->
-    %% io:format("Directory ~w getting poked for turn ~w~n", [Id, Turn]),
-    lists:foreach(fun(C) -> client:act(C, Accumulator) end, Clients),
+running(cast, {poke, Turn, Accumulator}, _Data=#data{id=_Id,clients=Clients}) ->
+    io:format("Directory ~w getting poked for turn ~w~n", [_Id, Turn]),
+    lists:foreach(fun(C) -> client:act(C, Turn, Accumulator) end, Clients),
     keep_state_and_data;
 running(cast, disconnect, Data=#data{id=Id,clients=Clients}) ->
-    %% FIXME this is synchronous; we could send an async call and stop from
-    %% within the client state machine
     io:format("Directory ~w disconnecting after iteration complete~n", [Id]),
     lists:foreach(fun client:logout/1, Clients),
     {keep_state, Data#data{clients=[]}}.
