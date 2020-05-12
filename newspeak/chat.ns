@@ -133,11 +133,12 @@ class Chat usingPlatform: platform = Value (
         ifFalse: [ buffer append: payload ].
 
       members isEmpty
-        ifTrue: [ accumulator <-: stop: #post ]
+        ifTrue: [ accumulator <-: stop: #post. #noPromise ]
         ifFalse: [
           accumulator <-: bump: members size act: #post.
           members doWithPromise: [:m |
-            m <-: forward: self payload: payload accu: accumulator ] ]
+            m <-: forward: self payload: payload accu: accumulator.
+            #noPromise ] ]
     )
 
     public join: client <Promise[Client]> id: clientId accu: accumulator = (
@@ -147,15 +148,18 @@ class Chat usingPlatform: platform = Value (
         buffer size > 0 ifTrue: [
           accumulator <-: bump: buffer size act: #ignore.
           buffer do: [:m |
-            client <-: forward: self payload: m accu: accumulator ] ] ].
+            client <-: forward: self payload: m accu: accumulator.
+            #noPromise ] ] ].
 
       client <-: accept: self chatId: chatId accu: accumulator.
+      #noPromise
     )
 
     public leave: client <Promise[Client]> clientId: clientId <Integer> didLogout: didLogout accu: accumulator = (
       | removed |
       removed:: members removeById: clientId.
-      client <-: left: chatId didLogout: didLogout accu: accumulator
+      client <-: left: chatId didLogout: didLogout accu: accumulator.
+      #noPromise
     )
   )
 
@@ -179,26 +183,29 @@ class Chat usingPlatform: platform = Value (
           ^ self ].
 
       chats doWithPromise: [:c |
-        c <-: leave: self clientId: id didLogout: true accu: nil ]
+        c <-: leave: self clientId: id didLogout: true accu: nil.
+        #noPromise ]
     )
 
     public left: chatId didLogout: didLogout accu: accumulator = (
       chats removeById: chatId.
 
       (chats isEmpty and: [ didLogout ])
-        ifTrue: [ directory <-: left: id ]
+        ifTrue: [ directory <-: left: id. #noPromise ]
         ifFalse: [
           accumulator == nil ifFalse: [
-            accumulator <-: stop: #leave ] ]
+            accumulator <-: stop: #leave. #noPromise ] ]
     )
 
     public accept: chat <Promise[Chat]> chatId: chatId accu: accumulator = (
       chats append: chatId and: chat.
-      accumulator <-: stop: #ignore
+      accumulator <-: stop: #ignore.
+      #noPromise
     )
 
     public forward: chat <FarReference[Chat]> payload: payload <Array | nil> accu: accumulator = (
-      accumulator <-: stop: #postDelivery
+      accumulator <-: stop: #postDelivery.
+      #noPromise
     )
 
     private fibonacci: n = (
@@ -264,11 +271,13 @@ class Chat usingPlatform: platform = Value (
 
         1 to: invitations do: [:i |
           | k = f at: i. |
-          createdP <-: join: (k at: 2) id: (k at: 1) accu: accumulator ].
+          createdP <-: join: (k at: 2) id: (k at: 1) accu: accumulator.
+          #noPromise ].
         ^ self ].
 
       (* else *)
-      accumulator <-: stop: #none
+      accumulator <-: stop: #none.
+      #noPromise
     )
   )
 
@@ -295,7 +304,8 @@ class Chat usingPlatform: platform = Value (
               ifTrue: [
                 madeFriends:: true.
                 client <-: befriend: friend clientId: fId.
-                friend <-: befriend: client clientId: cId ] ] ] ]
+                friend <-: befriend: client clientId: cId.
+                #noPromise ] ] ] ]
     )
 
     public left: clientId <Integer> = (
@@ -304,20 +314,23 @@ class Chat usingPlatform: platform = Value (
       clients isEmpty ifTrue: [
         clients removeAll.
         poker == nil ifFalse: [
-          poker <-: finished ]
+          poker <-: finished.
+          #noPromise ]
       ]
     )
 
     public poke: factory accu: accumulator = (
       clients doWithTuple: [:tuple |
-        (tuple at: 2) <-: act: factory accu: accumulator ]
+        (tuple at: 2) <-: act: factory accu: accumulator.
+        #noPromise ]
     )
 
     public disconnect: p = (
       poker:: p.
 
       clients doWithPromise: [:client |
-        client <-: logout ]
+        client <-: logout.
+        #noPromise ]
     )
   )
 
@@ -326,7 +339,6 @@ class Chat usingPlatform: platform = Value (
     private actions = TransferArray new: 7 withAll: 0.
     private poker = p.
     private start = system ticks. (* Microseconds *)
-    private end ::= 0.
     private duration ::= 0.
     private expected ::= anInt.
     private didStop ::= false.
@@ -352,18 +364,21 @@ class Chat usingPlatform: platform = Value (
 
       expected:: expected - 1.
       expected = 0 ifTrue: [
+        | end |
         end:: system ticks.
-        duration:: end - start.
+        duration:: (end - start) // 1000.0.
         didStop:: true.
 
         (* TODO replace *)
         (* poker <-: confirm: turn duration: duration *)
-        poker <-: confirm ]
+        poker <-: confirm.
+        #noPromise ]
     )
 
     (* TODO delete *)
     public print: poker i: i j: j = (
-      poker <-: collect: i j: j duration: duration actions: actions
+      poker <-: collect: i j: j duration: duration actions: actions.
+      #noPromise
     )
   )
 
@@ -383,7 +398,7 @@ class Chat usingPlatform: platform = Value (
     private factory = factory.
     private bench ::= nil.
     private last ::= false.
-    private turnSeries = Vector new.
+    private turnSeries ::= Vector new.
     (*  TODO replace
     private turnSeries = Array new: numTurns. *)
   |)(
@@ -400,15 +415,18 @@ class Chat usingPlatform: platform = Value (
         | index |
         index:: (clientId % directories size) + 1.
 
-        (directories at: index) <-: login: clientId ].
+        (directories at: index) <-: login: clientId.
+        #noPromise ].
 
       directories do: [:directory |
-        directory <-: befriend ].
+        directory <-: befriend.
+        #noPromise ].
 
       1 to: turns do: [:i |
         | accumulator = (actors createActorFromValue: Accumulator) <-: new: self expected: clients turns: i. |
         directories do: [:d |
-          d <-: poke: factory accu: accumulator ].
+          d <-: poke: factory accu: accumulator.
+          #noPromise ].
 
         runtimes append: accumulator ].
     )
@@ -423,7 +441,8 @@ class Chat usingPlatform: platform = Value (
       confirmations:: confirmations - 1.
       confirmations = 0 ifTrue: [
         directories do: [:d |
-          d <-: disconnect: self ] ]
+          d <-: disconnect: self.
+          #noPromise ] ]
     )
 
     public finished = (
@@ -452,21 +471,47 @@ class Chat usingPlatform: platform = Value (
 
         bench <-: complete.
 
-        (* last ifTrue: [
-          finals doIndexes: [:i |
-            | turns |
-            turns:: finals at: i.
-            ].
-           ] *)
+        last ifTrue: [
+          | stats turnValues qos qualityOfService |
+          stats:: SampleStats new: turnSeries.
+          turnSeries:: Vector new: turnSeries size.
+          turnValues:: Vector new.
+          qos:: Vector new.
 
-      '\n\n' println.
-       ('#post:    ' + (actions at: 1)) println.
-       ('#postDel: ' + (actions at: 2)) println.
-       ('#leave:   ' + (actions at: 3)) println.
-       ('#invite:  ' + (actions at: 4)) println.
-       ('#compute: ' + (actions at: 5)) println.
-       ('#ignore:  ' + (actions at: 6)) println.
-       ('#none:    ' + (actions at: 7)) println. ]
+          1 to: turns do: [:k |
+            | kTurnValues |
+            turnValues size < k
+              ifTrue: [
+                kTurnValues:: Vector new.
+                turnValues append: kTurnValues ]
+              ifFalse: [
+                self error: 'unexpected, really'.
+                kTurnValues:: turnValues at: k ].
+
+            finals do: [:iArr |
+              iArr size >= k ifTrue: [
+                kTurnValues append: (iArr at: k) ] ] ].
+
+            turnValues size timesRepeat: [
+              qos append: (SampleStats new: turnValues remove) stddev ].
+
+            qualityOfService:: (SampleStats new: qos) median asString.
+
+            'Turns,' print.
+            stats mean print.       ',' print.
+            stats median print.     ',' print.
+            stats err print.        ',' print.
+            stats stddev print.     ',' print.
+            qualityOfService print.
+            '' println.
+
+            ('Post,'         + (actions at: 1)) println.
+            ('PostDelivery,' + (actions at: 2)) println.
+            ('Leave,'        + (actions at: 3)) println.
+            ('Invite,'       + (actions at: 4)) println.
+            ('Compute,'      + (actions at: 5)) println.
+            ('Ignore,'       + (actions at: 6)) println.
+            ('None,'         + (actions at: 7)) println. ] ]
     )
   )
 
@@ -544,7 +589,8 @@ class Chat usingPlatform: platform = Value (
   |
   )(
     public run: benchmark isLast: last = (
-      poker <-: start: benchmark isLast: last
+      poker <-: start: benchmark isLast: last.
+      #noPromise
     )
   )
 
@@ -559,6 +605,52 @@ class Chat usingPlatform: platform = Value (
 
     public asString = (
       notYetImplemented
+    )
+  )
+
+  class SampleStats new: samples = (
+  | private samples = samples.
+  |)(
+    private sum = (
+      | result |
+      result:: 0.0.
+      samples do: [:s | result:: result + s ].
+      ^ result
+    )
+
+    public mean = (
+      ^ sum // samples size
+    )
+
+    public median = (
+      | middle size |
+      samples isEmpty ifTrue: [ ^ 0.0 ].
+      size:: samples size.
+
+      middle:: size / 2.
+      ^ (size % 2) = 1
+        ifTrue: [ samples at: middle + 1 ]
+        ifFalse: [ ((samples at: middle) + (samples at: middle + 1)) // 2 ]
+    )
+
+    public stddev = (
+      | m temp |
+      m:: mean.
+      temp:: 0.0.
+
+      samples do: [:s |
+        temp:: temp + ((m - s) * (m - s)) ].
+
+      ^ (temp // samples size) sqrt
+    )
+
+    public err = (
+      | m = mean. |
+      ^ 100.0 * ((confidenceHigh - m) // m)
+    )
+
+    private confidenceHigh = (
+      ^ mean + 1.96 * (stddev // samples size sqrt)
     )
   )
 
@@ -614,7 +706,7 @@ class Chat usingPlatform: platform = Value (
 
           startTime:: system ticks.
 
-          'Runner.run: ' print. iterations println.
+          (* 'Runner.run: ' print. iterations println. *)
 
           benchmark run: self isLast: iterations = 1.
           iterations:: iterations - 1.
@@ -626,8 +718,8 @@ class Chat usingPlatform: platform = Value (
     public complete = (
       endTime:: system ticks.
       running:: false.
-      output report: endTime - startTime.
-      ('Total: ' + (endTime - startTime) + 'us') println.
+      output report: (endTime - startTime) // 1000.0.
+      (* ('Total: ' + (endTime - startTime) + 'us') println. *)
       next.
     )
   )
@@ -643,7 +735,7 @@ class Chat usingPlatform: platform = Value (
     system exit: 0.*)
 
     cfg:: Config new: args.
-    cfg print.
+    (* cfg print. *)
     runner:: (actors createActorFromValue: Runner) <-: new: cfg.
     ^ (runner <-: start: 32)
   )
