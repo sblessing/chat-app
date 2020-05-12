@@ -2,9 +2,9 @@
 Chat App: Cross-Language Actor Benchmark
 
 ## Requirements
-  * Pony 
+  * Pony
   * CAF
-  * Newspeak/SOMNs
+  * SOMns
   * ABS
   * Python >= 3.5
   * gnuplot
@@ -13,13 +13,13 @@ Chat App: Cross-Language Actor Benchmark
             pip install tqdm
 
 ## Compile Benchmarks
-* Pony  
+* Pony
 
         cd pony
         ponyc .
 
 * CAF
-        
+
         cd caf
         ./configure
         cd build
@@ -27,11 +27,17 @@ Chat App: Cross-Language Actor Benchmark
 
 * Newspeak
 
+        # It's Recommended to point JAVA_HOME to a JDK 8
+        git clone -b exp/chatapp --depth=1 --recursive --shallow-submodules \
+                  https://github.com/smarr/SOMns
+        cd SOMns
+        ant compile
+
 * ABS
 
 ## Providing a runner
         Providing a new runner is easy. Simply create a new <your_language>.py file in runners/ and explain
-        to the framework (a) how to run your process and (b) how to interpret the output. For this, you are 
+        to the framework (a) how to run your process and (b) how to interpret the output. For this, you are
         required to implement "setup" and "output". If your implementations adheres to the parseable output
         specification, the generic OutputParser is sufficient. If you have use some custom output, you need
         to supply your own OutputParser in output_parser.py.
@@ -54,8 +60,9 @@ Chat App: Cross-Language Actor Benchmark
 
 ## Run Benchmarks
 
-        python3 run.py [-r|--run pony|caf|abs|newspeak] [-l|--hyperthreads] [-p|--plot] [-m|--memory]
+        python3 run.py [-r|--run pony|caf|abs|newspeak] [-s|--scenario mixed|message|compute|contention|server] [-l|--hyperthreads] [-p|--plot] [-m|--memory]
 
         -r | --run can be combined, that is all runners can be invoked in one go.
+        -s | --scenario can be combined and invoked in one go.
         -m | --memory measures memory consumption but slows down execution times.
         -p | --plot can be used even after having run the benchmarks.
