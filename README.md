@@ -60,8 +60,9 @@ Chat App: Cross-Language Actor Benchmark
 
 ## Run Benchmarks
 
-        python3 run.py [-r|--run pony|caf|abs|newspeak] [-l|--hyperthreads] [-p|--plot] [-m|--memory]
+        python3 run.py [-r|--run pony|caf|abs|newspeak] [-s|--scenario mixed|message|compute|contention|server] [-l|--hyperthreads] [-p|--plot] [-m|--memory]
 
         -r | --run can be combined, that is all runners can be invoked in one go.
+        -s | --scenario can be combined and invoked in one go.
         -m | --memory measures memory consumption but slows down execution times.
         -p | --plot can be used even after having run the benchmarks.
