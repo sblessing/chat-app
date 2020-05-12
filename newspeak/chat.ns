@@ -476,7 +476,7 @@ class Chat usingPlatform: platform = Value (
     )
 
     public collect: i j: j duration: duration actions: actionArr <TransferArray> = (
-      1 to: 5 do: [:i |
+      1 to: 7 do: [:i |
         actions at: i put: (actions at: i) + (actionArr at: i) ].
 
 
