@@ -603,8 +603,15 @@ class Chat usingPlatform: platform = Value (
       samples append: micro
     )
 
-    public asString = (
-      notYetImplemented
+    public printReport = (
+      | stats = SampleStats new: samples. |
+
+      'Chat App,' print.
+      stats mean print.       ',' print.
+      stats median print.     ',' print.
+      stats err print.        ',' print.
+      stats stddev print.     ',' print.
+      '' println.
     )
   )
 
@@ -663,7 +670,7 @@ class Chat usingPlatform: platform = Value (
     )
 
     public summarize = (
-      result println
+      result printReport
     )
   )
 
@@ -696,8 +703,8 @@ class Chat usingPlatform: platform = Value (
       running ifTrue: [ ^ self ].
 
       summarize ifTrue: [
-        (*'Runner.summarize' println.
-        output summarize.*)
+        (*'Runner.summarize' println.*)
+        output summarize.
         summarize:: false ].
 
       iterations > 0
