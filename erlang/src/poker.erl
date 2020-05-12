@@ -20,8 +20,10 @@
 
 %% chat-app events
 
-%% We add a one-time sync call that confirms final idleness for the Main driver.
--export([apply/2,sync/1,confirm/2]).
+%% Events sent by main
+-export([apply/2,sync/1]).
+%% Events sent by accumulator
+-export([confirm/2]).
 
 -define(SERVER, ?MODULE).
 

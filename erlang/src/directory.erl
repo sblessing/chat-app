@@ -18,7 +18,7 @@
 %% state functions
 -export([running/3]).
 
-%% chat-app events
+%% Events sent by poker
 -export([login/2,befriend/1,poke/3,disconnect/1]).
 
 -record(data, {id,

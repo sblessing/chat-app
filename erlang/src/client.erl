@@ -17,6 +17,7 @@
 -export([callback_mode/0, init/1, terminate/3, code_change/4]).
 -export([running/3]).
 
+%% Events sent by directory
 -export([befriend/2,act/2,logout/1]).
 
 -record(data, {id,accumulator,friends=[],chats=[],
