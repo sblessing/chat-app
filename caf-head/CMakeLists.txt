@@ -37,7 +37,7 @@ if(CAF_CHATAPP_ENABLE_STANDALONE_BUILD)
   FetchContent_Declare(
     actor_framework
     GIT_REPOSITORY https://github.com/actor-framework/actor-framework.git
-    GIT_TAG        94e26b315
+    GIT_TAG        3975c5d
   )
   FetchContent_Populate(actor_framework)
   set(CAF_ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
