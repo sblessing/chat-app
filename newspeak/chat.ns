@@ -357,7 +357,7 @@ class Chat usingPlatform: platform = Value (
     private actions = TransferArray new: 7 withAll: 0.
     private poker = p.
     private start = system ticks. (* Microseconds *)
-    private duration ::= 0.
+    private duration ::= 0.0.
     private expected ::= anInt.
     private didStop ::= false.
   |)(
