@@ -210,11 +210,18 @@ actor Directory
     _clients.push(Client(id, this, _random.next()))
 
   be befriend() =>
+    var befriend' = false
+
     for friend in _clients.values() do
-      for client in _clients.values() do
-        if (_random.nextInt(100) < _befriend) and (friend isnt client) then
-          client.befriend(friend)
-          friend.befriend(client)
+      befriend' = false
+      
+      while not befriend' do
+        for client in _clients.values() do
+          if (_random.nextInt(100) < _befriend) and (friend isnt client) then
+            client.befriend(friend)
+            friend.befriend(client)
+            befriend' = true
+          end
         end
       end
     end
