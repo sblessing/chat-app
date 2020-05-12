@@ -628,7 +628,7 @@ class Chat usingPlatform: platform = Value (
       stats mean print.       ',' print.
       stats median print.     ',' print.
       stats err print.        ',' print.
-      stats stddev print.     ',' print.
+      stats stddev print.
       '' println.
     )
   )
