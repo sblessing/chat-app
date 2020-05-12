@@ -487,49 +487,53 @@ class Chat usingPlatform: platform = Value (
       accumulations = 0 ifTrue: [
         iteration:: iteration + 1.
 
-        bench <-: complete.
+        bench <-: complete: self isLast: last.
+        #noPromise ].
+    )
 
-        last ifTrue: [
-          | stats turnValues qos qualityOfService |
-          stats:: SampleStats new: turnSeries.
-          turnSeries:: Vector new: turnSeries size.
-          turnValues:: Vector new.
-          qos:: Vector new.
+    public printStatistics = (
+      | stats turnValues qos qualityOfService |
+      last ifFalse: [ self error: 'printStatistics is only to be triggered on last turn.'].
 
-          1 to: turns do: [:k |
-            | kTurnValues |
-            turnValues size < k
-              ifTrue: [
-                kTurnValues:: Vector new.
-                turnValues append: kTurnValues ]
-              ifFalse: [
-                self error: 'unexpected, really'.
-                kTurnValues:: turnValues at: k ].
+      stats:: SampleStats new: turnSeries.
+      turnSeries:: Vector new: turnSeries size.
+      turnValues:: Vector new.
+      qos:: Vector new.
 
-            finals do: [:iArr |
-              iArr size >= k ifTrue: [
-                kTurnValues append: (iArr at: k) ] ] ].
+      1 to: turns do: [:k |
+        | kTurnValues |
+        turnValues size < k
+          ifTrue: [
+            kTurnValues:: Vector new.
+            turnValues append: kTurnValues ]
+          ifFalse: [
+            self error: 'unexpected, really'.
+            kTurnValues:: turnValues at: k ].
 
-            turnValues size timesRepeat: [
-              qos append: (SampleStats new: turnValues remove) stddev ].
+        finals do: [:iArr |
+          iArr size >= k ifTrue: [
+            kTurnValues append: (iArr at: k) ] ] ].
 
-            qualityOfService:: (SampleStats new: qos) median asString.
+        turnValues size timesRepeat: [
+          qos append: (SampleStats new: turnValues remove) stddev ].
 
-            'Turns,' print.
-            stats mean print.       ',' print.
-            stats median print.     ',' print.
-            stats err print.        ',' print.
-            stats stddev print.     ',' print.
-            qualityOfService print.
-            '' println.
+        qualityOfService:: (SampleStats new: qos) median asString.
 
-            ('Post,'         + (actions at: 1)) println.
-            ('PostDelivery,' + (actions at: 2)) println.
-            ('Leave,'        + (actions at: 3)) println.
-            ('Invite,'       + (actions at: 4)) println.
-            ('Compute,'      + (actions at: 5)) println.
-            ('Ignore,'       + (actions at: 6)) println.
-            ('None,'         + (actions at: 7)) println. ] ]
+        'Turns,' print.
+        stats mean print.       ',' print.
+        stats median print.     ',' print.
+        stats err print.        ',' print.
+        stats stddev print.     ',' print.
+        qualityOfService print.
+        '' println.
+
+        ('Post,'         + (actions at: 1)) println.
+        ('PostDelivery,' + (actions at: 2)) println.
+        ('Leave,'        + (actions at: 3)) println.
+        ('Invite,'       + (actions at: 4)) println.
+        ('Compute,'      + (actions at: 5)) println.
+        ('Ignore,'       + (actions at: 6)) println.
+        ('None,'         + (actions at: 7)) println.
     )
   )
 
@@ -612,26 +616,6 @@ class Chat usingPlatform: platform = Value (
     )
   )
 
-  class Result new: name parseable: aBool = (
-  | private benchmark = name.
-    private parseable = aBool.
-    private samples = Vector new.
-  |)(
-    public record: micro = (
-      samples append: micro
-    )
-
-    public printReport = (
-      | stats = SampleStats new: samples. |
-
-      'Chat App,' print.
-      stats mean print.       ',' print.
-      stats median print.     ',' print.
-      stats err print.        ',' print.
-      stats stddev print.
-      '' println.
-    )
-  )
 
   class SampleStats new: samples = (
   | private samples = samples.
@@ -679,23 +663,32 @@ class Chat usingPlatform: platform = Value (
     )
   )
 
-  class OutputManager new: parseable = (
-  | private parseable = parseable.
-    private result = Result new: 'AsyncActorBenchmark' parseable: parseable.
+  class Result new: parseable = (
+  | private samples <Vector[Double]> = Vector new.
   |)(
-    public report: micro = (
-      result record: micro
+    public record: milliSeconds <Double> = (
+      samples append: milliSeconds
     )
 
-    public summarize = (
-      result printReport
+    public summarize: poker isLast: last = (
+      | stats = SampleStats new: samples. |
+
+      'Chat App,' print.
+      stats mean print.       ',' print.
+      stats median print.     ',' print.
+      stats err print.        ',' print.
+      stats stddev print.
+      '' println.
+
+      last ifFalse: [ self error: 'summarize is only expected for last turn.'].
+      poker <-: printStatistics
     )
   )
 
   class Runner new: cfg = (
   | private configuration = cfg.
     private benchmark
-    private output = OutputManager new: cfg parseable.
+    private result = Result new: cfg parseable.
 
     private iterations
 
@@ -713,16 +706,16 @@ class Chat usingPlatform: platform = Value (
 
       benchmark:: ChatApp new: configuration.
       iterations:: iter.
-      next.
+      next: nil isLast: false.
       ^ pp promise
     )
 
-    private next = (
+    private next: poker isLast: last = (
       running ifTrue: [ ^ self ].
 
       summarize ifTrue: [
         (*'Runner.summarize' println.*)
-        output summarize.
+        result summarize: poker isLast: last.
         summarize:: false ].
 
       iterations > 0
@@ -740,12 +733,12 @@ class Chat usingPlatform: platform = Value (
           completionR resolve: 0 ]
     )
 
-    public complete = (
+    public complete: aPoker isLast: last = (
       endTime:: system ticks.
       running:: false.
-      output report: (endTime - startTime) // 1000.0.
+      result record: (endTime - startTime) // 1000.0.
       (* ('Total: ' + (endTime - startTime) + 'us') println. *)
-      next.
+      next: aPoker isLast: last.
     )
   )
 
