@@ -14,7 +14,7 @@ def setup(oBenchmarkRunner, cores, phys_cores, scenario, memory):
 
   # the -t needs to go before the chat.ns
   oBenchmarkRunner.configure(
-    "som", "newspeak/chat.ns", memory, ["-t", str(threads)] + scenario)
+    "newspeak", "SOMns/som", memory, [["-t", str(threads)], ["newspeak/chat.ns", scenario]])
 
 def gnuplot(cores, files, results):
   OutputParser(files).parse(cores, results)
