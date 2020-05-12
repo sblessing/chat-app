@@ -339,7 +339,6 @@ class Chat usingPlatform: platform = Value (
     private actions = TransferArray new: 7 withAll: 0.
     private poker = p.
     private start = system ticks. (* Microseconds *)
-    private end ::= 0.
     private duration ::= 0.
     private expected ::= anInt.
     private didStop ::= false.
@@ -365,6 +364,7 @@ class Chat usingPlatform: platform = Value (
 
       expected:: expected - 1.
       expected = 0 ifTrue: [
+        | end |
         end:: system ticks.
         duration:: (end - start) // 1000.0.
         didStop:: true.
