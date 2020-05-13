@@ -116,14 +116,12 @@ running(cast, {act, Turn, Accumulator},
             {keep_state, Data#data{chats=[Chat | Chats]}}
     end;
 running(cast, {forward, _Message, Accumulator}, _Data=#data{id=_Id}) ->
-    io:format("Client ~w (~w) receiving message ~w~n", [_Id, self(), _Message]),
     accumulator:stop(Accumulator, {client, forward}),
     keep_state_and_data;
 running(cast, {left, Chat, Accumulator}, Data=#data{chats=Chats}) ->
     accumulator:stop(Accumulator, {client, left}),
     { keep_state, Data#data{chats=lists:delete(Chat, Chats)} };
 running(cast, logout, _Data=#data{id=_Id}) ->
-    io:format("Client ~w (~w) being told to logout~n", [_Id, self()]),
     {stop, normal}.
 
 terminate(_Reason, _State, _Data=#data{id=_Id}) ->

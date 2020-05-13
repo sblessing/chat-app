@@ -63,7 +63,6 @@ running(cast, {post, _Client, Message, Accumulator},
     case Members of
         [] -> ok;
         _ ->
-            io:format("Chat forwarding message ~w to ~w clients~n", [Message, length(Members)]),
             accumulator:bump(Accumulator, length(Members)),
              lists:foreach(fun(C) -> client:forward(C, Message, Accumulator) end, Members)
     end,

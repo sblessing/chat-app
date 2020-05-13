@@ -75,11 +75,11 @@ running(cast, befriend, _Data=#data{clients=Clients,p_befriend=PBefriend}) ->
       Clients),
     keep_state_and_data;
 running(cast, {poke, Turn, Accumulator}, _Data=#data{id=_Id,clients=Clients}) ->
-    io:format("Directory ~w getting poked for turn ~w~n", [_Id, Turn]),
+    %% io:format("Directory ~w getting poked for turn ~w~n", [_Id, Turn]),
     lists:foreach(fun(C) -> client:act(C, Turn, Accumulator) end, Clients),
     keep_state_and_data;
-running(cast, disconnect, Data=#data{id=Id,clients=Clients}) ->
-    io:format("Directory ~w disconnecting after iteration complete~n", [Id]),
+running(cast, disconnect, Data=#data{id=_Id,clients=Clients}) ->
+    %% io:format("Directory ~w disconnecting after iteration complete~n", [_Id]),
     lists:foreach(fun client:logout/1, Clients),
     {keep_state, Data#data{clients=[]}}.
 
@@ -95,7 +95,7 @@ callback_mode() -> state_functions.
 
 init([Id, Compute, Post, Leave, Invite, Befriend]) ->
     process_flag(trap_exit, true),
-    io:format("Directory ~w starting~n", [Id]),
+    %% io:format("Directory ~w starting~n", [Id]),
     {ok, running, #data{id=Id,
                         p_compute=Compute,
                         p_post=Post,

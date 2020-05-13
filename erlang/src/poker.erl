@@ -53,7 +53,7 @@ confirm(Poker, Accumulator) ->
 
 idle({call, From}, {apply, Iteration},
      Data=#data{n_turns=Turns,directories=Directories,n_directories=NDirectories,n_clients=NClients}) ->
-    io:format("Poker starting iteration ~w~n", [Iteration]),
+    %% io:format("Poker starting iteration ~w~n", [Iteration]),
     %% Create clients
     lists:foreach(fun(I) -> directory:login(lists:nth(I rem NDirectories + 1, Directories), I) end,
                   lists:seq(1, NClients)),
@@ -71,9 +71,9 @@ idle({call, From}, sync, _Data) ->
 
 
 
-running({call, _From}, {apply, Iteration}, _Data) ->
+running({call, _From}, {apply, _Iteration}, _Data) ->
     %% Delay next iteration until previous one finished
-    io:format("Poker postponing iteration ~w~n", [Iteration]),
+    %% io:format("Poker postponing iteration ~w~n", [_Iteration]),
     {keep_state_and_data, [postpone]};
 running({call, _From}, sync, _Data) ->
     {keep_state_and_data, [postpone]};
@@ -83,7 +83,7 @@ running(cast, {confirm, _Accumulator},
     %% many turns still outstanding
     case Turns of
         1 ->
-            io:format("Poker finishing iteration~n"),
+            %% io:format("Poker finishing iteration~n"),
             lists:foreach(fun directory:disconnect/1, Directories),
             {next_state, idle, Data#data{outstanding_turns=0}};
         _ -> {keep_state, Data#data{outstanding_turns=Turns - 1}}
@@ -102,7 +102,7 @@ start(Clients, Directories, Turns, Compute, Post, Leave, Invite, Befriend, Parse
 callback_mode() -> state_functions.
 
 init([Clients, Directories, Turns, Compute, Post, Leave, Invite, Befriend, Parseable]) ->
-    io:format("Poker creating ~w directories~n", [Directories]),
+    %% io:format("Poker creating ~w directories~n", [Directories]),
     D=lists:map(fun(I) -> {ok, Dir}=directory:start(I, Compute, Post, Leave, Invite, Befriend), Dir end,
                 lists:seq(1, Directories)),
     {ok, idle, #data{

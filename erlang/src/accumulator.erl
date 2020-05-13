@@ -20,7 +20,7 @@
 %% chat-app events
 -export([stop/2,bump/2]).
 
--record(data, {count=0,poker,iteration,turn}).
+-record(data, {start_time,count=0,poker,iteration,turn}).
 
 %%%===================================================================
 %%% API
@@ -39,7 +39,7 @@ stop(Accumulator, Action) ->
 
 running({call, From}, {bump, Amount}, Data=#data{count=Count,turn=_Turn}) ->
     {keep_state, Data#data{count=Count + Amount}, {reply, From, ok}};
-running(cast, {stop, Action}, Data=#data{poker=Poker,count=Count,iteration=Iteration,turn=Turn}) ->
+running(cast, {stop, Action}, Data=#data{start_time=StartTime,poker=Poker,count=Count,iteration=Iteration,turn=Turn}) ->
     case Count of
         0 ->
             %% This is for diagnostic purposes; change the return value of the
@@ -47,7 +47,7 @@ running(cast, {stop, Action}, Data=#data{poker=Poker,count=Count,iteration=Itera
             io:format("*** Accumulator for iteration ~w turn ~w got surplus stop signal with action ~w~n", [Iteration, Turn, Action]),
             keep_state_and_data;
         1 ->
-            io:format("Accumulator for iteration ~w turn ~w stopped at ~w, sending confirmation to poker~n", [Iteration, Turn, Count]),
+            io:format("Iteration ~w turn ~w finished in ~w ms~n", [Iteration, Turn, erlang:system_time(millisecond) - StartTime]),
             poker:confirm(Poker, self()),
             {stop, normal};
             %% {keep_state, Data#data{count=0}};
@@ -62,8 +62,9 @@ running(cast, {stop, Action}, Data=#data{poker=Poker,count=Count,iteration=Itera
 callback_mode() -> state_functions.
 
 init([Poker, Iteration, Turn, NClients]) ->
-    io:format("Accumulator starting for iteration ~w, turn ~w~n", [Iteration, Turn]),
-    {ok, running, #data{count=NClients,poker=Poker,iteration=Iteration,turn=Turn}}.
+    %% io:format("Accumulator starting for iteration ~w, turn ~w~n", [Iteration, Turn]),
+    {ok, running,
+     #data{start_time=erlang:system_time(millisecond), count=NClients, poker=Poker, iteration=Iteration, turn=Turn}}.
 
 terminate(_Reason, _State, _Data) ->
     void.
