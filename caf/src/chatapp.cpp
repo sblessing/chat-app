@@ -192,7 +192,10 @@ client(caf::stateful_actor<client_state>* self, const uint64_t /*id*/,
   self->set_default_handler(caf::print_and_drop);
   return {
     [=](befriend_atom, const caf::actor& client) {
-      self->state.friends.emplace_back(client);
+      auto& s = self->state;
+      if (std::find(s.friends.begin(), s.friends.end(), client)
+          == s.friends.end())
+        s.friends.emplace_back(client);
     },
     [=](logout_atom) {
       auto& s = self->state;
@@ -293,10 +296,14 @@ caf::behavior directory(caf::stateful_actor<directory_state>* self,
     [=](befriend_atom) {
       auto& s = self->state;
       for (const auto& fclient : s.clients) {
-        for (const auto& client : s.clients) {
-          if ((s.random.next_int(100) < befriend) and fclient != client) {
-            self->send(client, befriend_atom::value, fclient);
-            self->send(fclient, befriend_atom::value, client);
+        bool has_friend = false;
+        while (!has_friend) {
+          for (const auto& client : s.clients) {
+            if ((s.random.next_int(100) < befriend) and fclient != client) {
+              self->send(client, befriend_atom::value, fclient);
+              self->send(fclient, befriend_atom::value, client);
+              has_friend = true;
+            }
           }
         }
       }
