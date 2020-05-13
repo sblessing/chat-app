@@ -599,6 +599,11 @@ void caf_main(caf::actor_system& system, const config& cfg) {
       << "Invalid arguments! Clients are not at least twice the directories."
       << std::endl;
     return;
+  } else if (cfg.befriend == 0 && cfg.invite != 0) {
+    std::cerr << "Invalid arguments! Invite probability need a befriend "
+                 "probability > 0."
+              << std::endl;
+    return;
   } else {
     auto chat = system.spawn(chatapp, cfg.clients, cfg.turns, cfg.directories,
                              cfg.compute, cfg.post, cfg.leave, cfg.invite,
