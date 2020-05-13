@@ -94,13 +94,13 @@
 	"colors": {
 		"newspeak": "#FF0000",
 		"caf": "#0000FF",
-    "caf-prerelease": "#00FF00",
+    "caf-pre": "#00FF00",
 		"pony": "#000000"
 	},
 	"versions": {
 		"newspeak": "0.7.0",
 		"caf": "0.17.5",
-    "caf-prerelease": "0.18",
+    "caf-pre": "0.18",
 		"pony": "0.34.1"
 	}
 }

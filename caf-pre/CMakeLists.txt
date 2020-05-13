@@ -76,4 +76,4 @@ endif()
 target_include_directories(chatapp PUBLIC src/util/)
 target_link_libraries(chatapp PUBLIC CAF::core)
 
-set_target_properties(chatapp PROPERTIES OUTPUT_NAME caf-prerelease)
+set_target_properties(chatapp PROPERTIES OUTPUT_NAME caf-pre)
