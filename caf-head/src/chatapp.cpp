@@ -287,8 +287,7 @@ struct directory_state {
 
 caf::behavior directory(caf::stateful_actor<directory_state>* self,
                         uint64_t seed, uint32_t befriend) {
-  auto& s = self->state;
-  s.random = pseudo_random(seed);
+  self->state.random = pseudo_random(seed);
   self->set_default_handler(caf::print_and_drop);
   return {
     [=](login_atom, uint64_t id) {
@@ -429,8 +428,9 @@ caf::behavior poker(caf::stateful_actor<poker_state>* self, uint64_t clients,
         self->send(s.directories[index], login_atom_v, client);
       }
       // To make sure that nobody's friendset is empty
-      for (const auto& dir : s.directories)
-        self->send(dir, befriend_atom_v);
+      if (befriend > 0)
+        for (const auto& dir : s.directories)
+          self->send(dir, befriend_atom_v);
       for (uint64_t i = 0; i < turns; ++i) {
         auto accu
           = self->spawn(accumulator, self, static_cast<size_t>(clients));
@@ -594,6 +594,10 @@ void caf_main(caf::actor_system& system, const config& cfg) {
     std::cerr
       << "Invalid arguments! Clients are not at least twice the directories."
       << std::endl;
+    return;
+  } else if (cfg.befriend == 0 && cfg.invite > 0) {
+    std::cerr << "Invalid arguments! Without a befriend chance all invites "
+                 "will fail" << std::endl;
     return;
   } else {
     auto chat = system.spawn(chatapp, cfg.clients, cfg.turns, cfg.directories,
