@@ -102,7 +102,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(chatapp, caf::first_custom_type_id)
   CAF_ADD_ATOM(chatapp, confirm_atom)
   CAF_ADD_ATOM(chatapp, disconnect_atom)
   CAF_ADD_ATOM(chatapp, finished_atom)
-  CAF_ADD_ATOM(chatapp, invite_atom)
   CAF_ADD_ATOM(chatapp, left_atom)
   CAF_ADD_ATOM(chatapp, login_atom)
   CAF_ADD_ATOM(chatapp, logout_atom)
@@ -254,24 +253,20 @@ client(caf::stateful_actor<client_state>* self, const uint64_t /*id*/,
           self->send(accumulator, stop_atom_v, action::compute);
           break;
         case action::invite: {
-          if (s.friends.size() == 0) {
-            self->send(accumulator, stop_atom_v, action::none);
-          } else {
-            assert(s.friends.size() != 0);
-            auto created = self->spawn(chat, self);
-            s.chats.emplace_back(created);
-            std::vector<caf::actor> f(s.friends.size());
-            std::copy(s.friends.begin(), s.friends.end(), f.begin());
-            s.rand.shuffle(f);
-            auto invitations = static_cast<size_t>(
-              s.rand.next_int(static_cast<uint32_t>(s.friends.size())));
-            if (invitations == 0)
-              invitations = 1;
-            self->send(accumulator, bump_atom_v, action::invite,
-                       invitations);
-            for (size_t i = 0; i < invitations; ++i)
-              self->send(created, caf::join_atom_v, f[i], accumulator);
-          }
+          assert(s.friends.size() != 0);
+          auto created = self->spawn(chat, self);
+          s.chats.emplace_back(created);
+          std::vector<caf::actor> f(s.friends.size());
+          std::copy(s.friends.begin(), s.friends.end(), f.begin());
+          s.rand.shuffle(f);
+          auto invitations = static_cast<size_t>(
+            s.rand.next_int(static_cast<uint32_t>(s.friends.size())));
+          if (invitations == 0)
+            invitations = 1;
+          self->send(accumulator, bump_atom_v, action::invite,
+                     invitations);
+          for (size_t i = 0; i < invitations; ++i)
+            self->send(created, caf::join_atom_v, f[i], accumulator);
           break;
         }
         default: // case action::none:
@@ -303,10 +298,13 @@ caf::behavior directory(caf::stateful_actor<directory_state>* self,
     [=](befriend_atom) {
       auto& s = self->state;
       for (const auto& fclient : s.clients) {
-        for (const auto& client : s.clients) {
-          if ((s.random.next_int(100) < befriend) and fclient != client) {
-            self->send(client, befriend_atom_v, fclient);
-            self->send(fclient, befriend_atom_v, client);
+        for (auto found_friend = false; !found_friend;) {
+          for (const auto& client : s.clients) {
+            if ((s.random.next_int(100) < befriend) and fclient != client) {
+              self->send(client, befriend_atom_v, fclient);
+              self->send(fclient, befriend_atom_v, client);
+              found_friend = true;
+            }
           }
         }
       }
