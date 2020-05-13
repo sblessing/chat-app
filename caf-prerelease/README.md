@@ -1,12 +1,13 @@
-# ChatApp Benchmark
-The ChatApp Benchmark implementation for CAF, concept from Pony-Team.
+# ChatApp
 
-## Build from source
-First build CAF from [sources](https://github.com/actor-framework/actor-framework) branch [release/0.17](https://github.com/actor-framework/actor-framework/tree/release/0.17).  
+The ChatApp benchmark implementation the prerelease of CAF 0.18.
+
+## Build instructions
+
 ```  
-./configure --with-caf='PATH to CAF build dir'  
-cd build  
-make  
-./bin/chatapp (-h for chatapp options or --long-help for CAF options)  
+./configure --enable-standalone-build --build-type=release
+make -C build
+./bin/caf-prerelease (-h for chatapp options or --long-help for CAF options)  
 ```  
 
+Instead of building CAF with the benchmark you can use a local install or point to a local CAF build director with the `--caf-root-dir=` option of the `configure` script.
