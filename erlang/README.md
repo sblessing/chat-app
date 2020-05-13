@@ -3,7 +3,8 @@ chatapp
 
 This implementation of the chat-app benchmark uses Erlang OTP state machines.
 An implementation using only `spawn` and message-send operators would probably
-be more performant, but we aimed for clarity of the state machines.
+be more performant; for the first version, we preferred the utility that the
+OTP library gives us.
 
 Build
 -----
@@ -13,4 +14,4 @@ Build
 Run
 ---
 
-    $ _build/default/bin/chatapp
+    $ _build/default/bin/chatapp -h
