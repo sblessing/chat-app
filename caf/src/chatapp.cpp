@@ -294,15 +294,17 @@ caf::behavior directory(caf::stateful_actor<directory_state>* self,
       s.clients.emplace_back(self->spawn(client, id, self, s.random.next()));
     },
     [=](befriend_atom) {
-      auto& s = self->state;
-      for (const auto& fclient : s.clients) {
-        bool has_friend = false;
-        while (!has_friend) {
-          for (const auto& client : s.clients) {
-            if ((s.random.next_int(100) < befriend) and fclient != client) {
-              self->send(client, befriend_atom::value, fclient);
-              self->send(fclient, befriend_atom::value, client);
-              has_friend = true;
+      if (befriend != 0) {
+        auto& s = self->state;
+        for (const auto& fclient : s.clients) {
+          bool has_friend = false;
+          while (!has_friend) {
+            for (const auto& client : s.clients) {
+              if ((s.random.next_int(100) < befriend) and fclient != client) {
+                self->send(client, befriend_atom::value, fclient);
+                self->send(fclient, befriend_atom::value, client);
+                has_friend = true;
+              }
             }
           }
         }
