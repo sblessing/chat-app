@@ -44,10 +44,10 @@ running(cast, {stop, Action}, Data=#data{start_time=StartTime,poker=Poker,count=
         0 ->
             %% This is for diagnostic purposes; change the return value of the
             %% `1' case below to activate this branch
-            io:format("*** Accumulator for iteration ~w turn ~w got surplus stop signal with action ~w~n", [Iteration, Turn, Action]),
+            %%io:format("*** Accumulator for iteration ~w turn ~w got surplus stop signal with action ~w~n", [Iteration, Turn, Action]),
             keep_state_and_data;
         1 ->
-            io:format("Iteration ~w turn ~w finished in ~w ms~n", [Iteration, Turn, erlang:system_time(millisecond) - StartTime]),
+            %%io:format("Iteration ~w turn ~w finished in ~w ms~n", [Iteration, Turn, erlang:system_time(millisecond) - StartTime]),
             poker:confirm(Poker, self()),
             {stop, normal};
             %% {keep_state, Data#data{count=0}};

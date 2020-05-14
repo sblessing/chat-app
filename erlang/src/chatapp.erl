@@ -24,7 +24,7 @@ main(Args) ->
         ],
     case getopt:parse(OptSpecList, Args) of
         {ok, {Options, []}} ->
-            io:format("Options: ~w~n", [Options]),
+            %%io:format("Options: ~w~n", [Options]),
             {ok, Poker}=poker:start(proplists:get_value(clients,Options),
                                     proplists:get_value(directories,Options),
                                     proplists:get_value(turns,Options),
