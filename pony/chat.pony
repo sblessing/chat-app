@@ -17,6 +17,7 @@ primitive Leave
 primitive Invite
 primitive Compute
 primitive Ignore
+primitive Error
 
 type Action is
   ( Post
@@ -25,6 +26,7 @@ type Action is
   | Invite
   | Compute
   | Ignore
+  | Error
   | None
   )
 
@@ -167,7 +169,12 @@ actor Client
       match behavior(_dice)
       | Post => _chats(index)?.post(None, accumulator)
       | Leave => _chats(index)?.leave(this, false, accumulator)
-      | Compute => Fibonacci(35) ; accumulator.stop(Compute)
+      | Compute => 
+        if not Fibonacci(35) == 9_227_465 then
+          accumulator.stop(Error)
+        end
+
+        accumulator.stop(Compute)
       | Invite =>
         let created = Chat(this)
 
@@ -500,6 +507,7 @@ actor Poker
               | Invite       => "Invite"
               | Compute      => "Compute"
               | Ignore       => "Ignore"
+              | Error        => "Error"
               | None         => "None"
               end
 
