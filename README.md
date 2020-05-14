@@ -25,6 +25,12 @@ Chat App: Cross-Language Actor Benchmark
         cd build
         make
 
+* CAF Pre
+
+        cd caf-pre
+        ./configure --enable-standalone-build --build-type=release
+        make -C build
+
 * Newspeak
 
         # It's Recommended to point JAVA_HOME to a JDK 8
