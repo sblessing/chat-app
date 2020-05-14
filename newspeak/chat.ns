@@ -404,13 +404,13 @@ class Chat usingPlatform: platform = Value (
   | private actions = Array new: 7 withAll: 0.
     private clients = clients.
     private befriend = befriend.
+    private dirs = dirs.
     private logouts ::= 0.
     private confirmations ::= 0.
     private turns ::= numTurns.
     private iteration ::= 1.
-    private rand = SimpleRand new: 42.
-    private directories <Promise[Directory]> = Array new: dirs withAll: [
-      (actors createActorFromValue: Directory) <-: new: rand next with: befriend ].
+    private rand ::= nil.
+    private directories <Promise[Directory]> ::= nil.
     private runtimes ::= Vector new.
     private accumulations ::= 0.
     private finals = Vector new.
@@ -423,10 +423,15 @@ class Chat usingPlatform: platform = Value (
   |)(
     public start: aBench isLast: isLast = (
       confirmations:: turns.
-      logouts:: directories size.
       bench:: aBench.
       last:: isLast.
       accumulations:: 0.
+      rand:: SimpleRand new: 42.
+
+      directories:: Array new: dirs withAll: [
+        (actors createActorFromValue: Directory) <-: new: rand next with: befriend ].
+
+      logouts:: directories size.
 
       finals append: (Array new: turns withAll: 0.0).
 
