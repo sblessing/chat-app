@@ -336,14 +336,20 @@ def run(runner, cores, loaded_modules, config, args, core_count, pbar):
       runner.execute(core_count, cores.get_cpubind(), scenario)
       pbar.update(1)
 
-def run_strong(runner, cores, loaded_modules, config, args, pbar):
+def run_strong(runner, cores, loaded_modules, config, args, core_start, core_end, pbar):
   core_count = 0
+
+  if core_start != -1:
+    cores.enalbe(core_start)
 
   for core in cores:
     cores.enable(core)
     core_count = core_count + 1
 
     run(runner, cores, loaded_modules, config, args, core_count, pbar)
+
+    if core_count == core_end:
+      break
 
 def main():
   numactl = False
@@ -355,6 +361,7 @@ def main():
   parser.add_argument('-n', '--numactl', dest='numactl', action='store_true')
   parser.add_argument('-w', '--weak', dest="weak", action="store_true")
   parser.add_argument('-m', '--memory', dest='memory', action='store_true')
+  parser.add_argument('-c', '--cores', dest="cores", action="append")
   parser.add_argument('-p', '--plot', dest='plot', action='store_true')
   args = parser.parse_args()
 
@@ -383,6 +390,17 @@ def main():
 
     sys.exit(-1)
 
+  core_start = -1
+  core_end = -1
+  requested_cores = -1
+
+  if args.cores:
+    cores_start = args.cores[0]
+    cores_end = args.cores[-1]
+
+    if cores_start != cores_end:
+      requested_cores = cores_end - cores_start
+
   if args.module:
     for i in args.module:
       loaded_modules[i] = importlib.import_module("." + i, package="runners")
@@ -394,12 +412,13 @@ def main():
 
       with HardwareThreading(args.hyperthreads, numactl or args.numactl) as cores:
         cores.disable(all = not args.weak)
-        run_count = len(cores)*len(modules)*len(args.scenarios) if not args.weak else len(modules)*len(args.scenarios)
+        core_count = len(cores) if requested_cores == -1 else requested_cores
+        run_count = core_count*len(modules)*len(args.scenarios) if not args.weak else len(modules)*len(args.scenarios)
         runner = BenchmarkRunner()
 
         with tqdm(total=run_count) as pbar:
           if(not args.weak):
-            run_strong(runner, cores, loaded_modules, config, args, pbar)
+            run_strong(runner, cores, loaded_modules, config, args, core_start, core_end, pbar)
           else:
             None
     
