@@ -165,6 +165,14 @@ class HardwareThreading:
     else:
       self._cpubind.remove(core)
 
+  def skip(self, count):
+    for core in self:
+      self.enable(core)
+      count = count - 1
+
+      if count == 0:
+        break
+
   def disable(self, core_id = -1, all = False):
     to_disable = None
 
@@ -238,6 +246,8 @@ class BenchmarkRunner:
 
       if self._memory:
         command = ["/usr/bin/time", "-f", "%M KB"] + command
+
+      print(command + args)
 
       with open(output + "_memory.txt", "w+") as memorylog:     
         bench = subprocess.Popen(command  + args, stdout=outputfile, stderr=memorylog)   
@@ -337,18 +347,18 @@ def run(runner, cores, loaded_modules, config, args, core_count, pbar):
       pbar.update(1)
 
 def run_strong(runner, cores, loaded_modules, config, args, core_start, core_end, pbar):
-  core_count = 0
+  core_count = 0 if core_start == -1 else core_start
 
-  if core_start != -1:
-    cores.enalbe(core_start)
+  cores.skip(core_start - 1)
 
   for core in cores:
     cores.enable(core)
     core_count = core_count + 1
+    core_start = core_start + 1
 
     run(runner, cores, loaded_modules, config, args, core_count, pbar)
 
-    if core_count == core_end:
+    if core_start == core_end:
       break
 
 def main():
@@ -395,11 +405,11 @@ def main():
   requested_cores = -1
 
   if args.cores:
-    cores_start = int(args.cores[0])
-    cores_end = int(args.cores[-1])
+    core_start = int(args.cores[0])
+    core_end = int(args.cores[-1])
 
-    if cores_start < cores_end:
-      requested_cores = cores_end - cores_start
+    if core_start < core_end:
+      requested_cores = core_end - core_start
 
   if args.module:
     for i in args.module:
