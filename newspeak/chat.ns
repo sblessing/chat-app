@@ -403,6 +403,7 @@ class Chat usingPlatform: platform = Value (
   class Poker clients: clients turns: numTurns directories: dirs befriend: befriend factory: factory = (
   | private actions = Array new: 7 withAll: 0.
     private clients = clients.
+    private befriend = befriend.
     private logouts ::= 0.
     private confirmations ::= 0.
     private turns ::= numTurns.
@@ -436,9 +437,10 @@ class Chat usingPlatform: platform = Value (
         (directories at: index) <-: login: clientId.
         #noPromise ].
 
-      directories do: [:directory |
-        directory <-: befriend.
-        #noPromise ].
+      befriend > 0 ifTrue: [
+        directories do: [:directory |
+          directory <-: befriend.
+          #noPromise ] ].
 
       1 to: turns do: [:i |
         | accumulator = (actors createActorFromValue: Accumulator) <-: new: self expected: clients turns: i. |
