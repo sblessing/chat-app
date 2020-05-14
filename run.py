@@ -277,10 +277,10 @@ def write_header_data(sourcepath, title, gnuplot_file, factor):
   print("set xlabel \"Cores\"", file=gnuplot_file)
   print("set ylabel \"Execution Time (Milliseconds, Median)\"", file=gnuplot_file)
 
-  if factor < 1:
-    print("set xtics %d" % (int(4*factor)), file=gnuplot_file)
-  else:
-    print("set xtics 8", file=gnuplot_file)
+  #if factor < 1:
+  #  print("set xtics %d" % (int(4*factor)), file=gnuplot_file)
+  #else:
+  print("set xtics 2", file=gnuplot_file)
 
   print("set xrange [4:]", file=gnuplot_file)
 
@@ -345,7 +345,7 @@ def run(runner, cores, loaded_modules, config, args, core_count, pbar):
       pbar.update(1)
 
 def run_strong(runner, cores, loaded_modules, config, args, core_start, core_end, pbar):
-  core_count = 0 if core_start == -1 else core_start
+  core_count = 0 if core_start == -1 else core_start - 1
 
   cores.skip(core_start - 1)
 
