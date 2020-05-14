@@ -247,8 +247,6 @@ class BenchmarkRunner:
       if self._memory:
         command = ["/usr/bin/time", "-f", "%M KB"] + command
 
-      print(command + args)
-
       with open(output + "_memory.txt", "w+") as memorylog:     
         bench = subprocess.Popen(command  + args, stdout=outputfile, stderr=memorylog)   
         bench.wait()
