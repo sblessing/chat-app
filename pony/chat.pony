@@ -369,8 +369,10 @@ actor Poker
     end
 
     // To make sure that nobody's friendset is empty
-    for directory in _directories.values() do
-      directory.befriend()
+    if _befriend > 0 then
+      for directory in _directories.values() do
+        directory.befriend()
+      end
     end
 
     while ( turns = turns - 1 ) >= 1 do
@@ -545,8 +547,8 @@ class iso ChatApp is AsyncActorBenchmark
     let sum = compute + post + leave + invite
 
     _invalid_args  =
-      if sum != 100 then
-        env.out.print("Invalid arguments! Sum of probabilities != 100.")
+      if (sum != 100) or ((_befriend == 0) and (_invite > 0)) then
+        env.out.print("Invalid arguments: sum != 0 or befriend == 0 and invite > 0!")
         env.exitcode(-1)
         true
       else
