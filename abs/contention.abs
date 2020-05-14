@@ -1,0 +1,30 @@
+module Scenario;
+
+import * from ChatApp;
+
+// The "contention" scenario
+
+{ // Main
+
+    Int nbrOfTurns = 64;
+    Int nbrOfDirectories = 1;
+    Int nbrOfClients = 1024;
+    Int befriend_threshold = 10;
+    Int sizeOfComp = 35;
+    Int inviteProb = 50;        // should be constant: chat.pony shuffles the
+                                // friends array and then takes a prefix of
+                                // random length, i.e., on average half of
+                                // friends are invited
+
+    Int nbfOfIterations = 1;    // Number of iterations of each experiment
+
+    ProbabilityDist pd_default = ProbabilityDist(55, // compute
+                                                 25, // post
+                                                 10, // invite
+                                                 10  // leave
+                                                 );
+
+    Poker poker = new PokerImp(nbrOfDirectories,nbrOfClients,nbrOfTurns,befriend_threshold,inviteProb,sizeOfComp);
+
+    poker.start(pd_default,nbfOfIterations);
+}
