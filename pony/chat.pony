@@ -547,7 +547,7 @@ class iso ChatApp is AsyncActorBenchmark
     let sum = compute + post + leave + invite
 
     _invalid_args  =
-      if (sum != 100) or ((_befriend == 0) and (_invite > 0)) then
+      if (sum != 100) or ((befriend == 0) and (invite > 0)) then
         env.out.print("Invalid arguments: sum != 0 or befriend == 0 and invite > 0!")
         env.exitcode(-1)
         true
