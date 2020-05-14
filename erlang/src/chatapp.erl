@@ -37,7 +37,7 @@ main(Args) ->
             lists:foreach(fun(I) -> poker:apply(Poker, I) end,
                           lists:seq(1, proplists:get_value(iterations,Options))),
             poker:sync(Poker),
-            io:format("Main finishing.~n");
+            %%io:format("Main finishing.~n");
         _ ->
             getopt:usage(OptSpecList, "chatapp")
     end,
