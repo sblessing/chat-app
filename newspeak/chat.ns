@@ -241,9 +241,13 @@ class Chat usingPlatform: platform = Value (
     )
 
     private compute: accumulator = (
-      fibonacci: 35.
-      accumulator <-: stop: #compute.
-      #noPromise
+      fibonacci: 35 = 9227465 
+        ifTrue: [
+          accumulator <-: stop: #compute.
+          #noPromise ]
+        ifFalse: [ 
+          accumulator <-: stop: #error.
+        ].
     )
 
     private invite: accumulator = (
@@ -373,8 +377,9 @@ class Chat usingPlatform: platform = Value (
       action = #invite       ifTrue: [ actions at: 4 put: 1 + (actions at: 4). ^ self ].
       action = #compute      ifTrue: [ actions at: 5 put: 1 + (actions at: 5). ^ self ].
       action = #ignore       ifTrue: [ actions at: 6 put: 1 + (actions at: 6). ^ self ].
+      action = #error        ifTrue: [ actions at: 7 put: 1 + (actions at: 7). ^ self ].
 
-      actions at: 7 put: 1 + (actions at: 7)
+      actions at: 8 put: 1 + (actions at: 8)
     )
 
     public stop: action = (
@@ -540,7 +545,8 @@ class Chat usingPlatform: platform = Value (
         ('Invite,'       + (actions at: 4)) println.
         ('Compute,'      + (actions at: 5)) println.
         ('Ignore,'       + (actions at: 6)) println.
-        ('None,'         + (actions at: 7)) println.
+        ['Error,'        + (actions at: 7)] println.
+        ('None,'         + (actions at: 8)) println.
     )
   )
 

@@ -20,7 +20,7 @@ enum class action : uint8_t {
   invite,
   compute,
   ignore,
-  error
+  error,
   none
 };
 
