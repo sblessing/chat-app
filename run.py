@@ -395,10 +395,10 @@ def main():
   requested_cores = -1
 
   if args.cores:
-    cores_start = args.cores[0]
-    cores_end = args.cores[-1]
+    cores_start = int(args.cores[0])
+    cores_end = int(args.cores[-1])
 
-    if cores_start != cores_end:
+    if cores_start < cores_end:
       requested_cores = cores_end - cores_start
 
   if args.module:
