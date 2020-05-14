@@ -298,10 +298,12 @@ actor Accumulator
 actor Poker
   let _actions: ActionMap
   let _parseable: Bool
+  let _directory_count: USize
   var _clients: U64
   var _logouts: USize
   var _confirmations: USize
   var _turns: U64
+  var _befriend: U32
   var _iteration: USize
   var _directories: Array[Directory] val
   var _runtimes: Array[Accumulator]
@@ -315,11 +317,14 @@ actor Poker
   new create(parseable: Bool, clients: U64, turns: U64, directories: USize, befriend: U32, factory: BehaviorFactory) =>
     _actions = ActionMap
     _parseable = parseable
+    _directory_count = directories
     _clients = clients
     _logouts = 0
     _confirmations = 0
     _turns = turns
+    _befriend = befriend
     _iteration = 0
+    _directories = recover val Array[Directory] end
     _runtimes = Array[Accumulator]
     _accumulations = 0
     _finals = Array[Array[F64]]
@@ -328,19 +333,22 @@ actor Poker
     _last = false
     _turn_series = Array[F64]
 
+  fun ref _prepare() =>
     let rand = SimpleRand(42)
 
     _directories = recover
-      let dirs = Array[Directory](directories)
+      let dirs = Array[Directory](_directory_count)
 
-      for i in Range[USize](0, directories.usize()) do
-        dirs.push(Directory(rand.next(), befriend))
+      for i in Range[USize](0, _directory_count) do
+        dirs.push(Directory(rand.next(), _befriend))
       end
 
       dirs
     end
 
   be apply(bench: AsyncBenchmarkCompletion, last: Bool) =>
+    _prepare()
+
     _confirmations = _turns.usize()
     _logouts = _directories.size()
     _bench = bench
