@@ -345,19 +345,23 @@ def run(runner, cores, loaded_modules, config, args, core_count, pbar):
       pbar.update(1)
 
 def run_strong(runner, cores, loaded_modules, config, args, core_start, core_end, pbar):
+  did_skip = False
   core_count = 0 if core_start == -1 else core_start - 1
 
-  cores.skip(core_start - 1)
+  if core_start > -1:
+    cores.skip(core_start - 1)
+    did_skip = True
 
   for core in cores:
     cores.enable(core)
     core_count = core_count + 1
-    core_start = core_start + 1
 
     run(runner, cores, loaded_modules, config, args, core_count, pbar)
 
-    if core_start == core_end:
-      break
+    if did_skip:
+      core_start = core_start + 1
+      if core_start == core_end:
+        break
 
 def main():
   numactl = False
