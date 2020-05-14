@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cassert>
 #include <chrono>
+#include <iomanip>
 #include <string>
 #include <vector>
 
@@ -10,7 +11,6 @@
 
 // caf
 #include "caf/all.hpp"
-#include "caf/io/middleman.hpp"
 
 /// clients actions
 enum class action : uint8_t {
@@ -42,31 +42,6 @@ using action_map = std::unordered_map<action, uint64_t>;
 
 using payload = std::vector<uint8_t>;
 using time_point = std::chrono::time_point<std::chrono::high_resolution_clock>;
-
-// messages
-using post_atom = caf::atom_constant<caf::atom("post")>;
-using forward_atom = caf::atom_constant<caf::atom("forward")>;
-using bump_atom = caf::atom_constant<caf::atom("bump")>;
-using stop_atom = caf::atom_constant<caf::atom("stop")>;
-using join_atom = caf::atom_constant<caf::atom("join")>;
-using leave_atom = caf::atom_constant<caf::atom("leave")>;
-using left_atom = caf::atom_constant<caf::atom("left")>;
-using befriend_atom = caf::atom_constant<caf::atom("befriend")>;
-using logout_atom = caf::atom_constant<caf::atom("logout")>;
-using invite_atom = caf::atom_constant<caf::atom("invite")>;
-using act_atom = caf::atom_constant<caf::atom("act")>;
-using login_atom = caf::atom_constant<caf::atom("login")>;
-using finished_atom = caf::atom_constant<caf::atom("finished")>;
-using poke_atom = caf::atom_constant<caf::atom("poke")>;
-using disconnect_atom = caf::atom_constant<caf::atom("disconnect")>;
-using confirm_atom = caf::atom_constant<caf::atom("confirm")>;
-using print_atom = caf::atom_constant<caf::atom("print")>;
-using collect_atom = caf::atom_constant<caf::atom("collect")>;
-using apply_atom = caf::atom_constant<caf::atom("apply")>;
-using complete_atom = caf::atom_constant<caf::atom("complete")>;
-using append_atom = caf::atom_constant<caf::atom("append")>;
-using quit_atom = caf::atom_constant<caf::atom("quit")>;
-using accepted_atom = caf::atom_constant<caf::atom("accepted")>;
 
 /// simulates extern client events for each turn
 struct behavior_factory {
@@ -108,6 +83,36 @@ typename Inspector::result_type inspect(Inspector& f, behavior_factory& x) {
            x._leave, x._invite);
 }
 
+CAF_BEGIN_TYPE_ID_BLOCK(chatapp, caf::first_custom_type_id)
+
+  CAF_ADD_TYPE_ID(chatapp, (behavior_factory))
+  CAF_ADD_TYPE_ID(chatapp, (action_map))
+  CAF_ADD_TYPE_ID(chatapp, (payload))
+
+  CAF_ADD_TYPE_ID(chatapp, (action))
+
+  CAF_ADD_ATOM(chatapp, accepted_atom)
+  CAF_ADD_ATOM(chatapp, act_atom)
+  CAF_ADD_ATOM(chatapp, append_atom)
+  CAF_ADD_ATOM(chatapp, apply_atom)
+  CAF_ADD_ATOM(chatapp, befriend_atom)
+  CAF_ADD_ATOM(chatapp, bump_atom)
+  CAF_ADD_ATOM(chatapp, collect_atom)
+  CAF_ADD_ATOM(chatapp, complete_atom)
+  CAF_ADD_ATOM(chatapp, confirm_atom)
+  CAF_ADD_ATOM(chatapp, disconnect_atom)
+  CAF_ADD_ATOM(chatapp, finished_atom)
+  CAF_ADD_ATOM(chatapp, left_atom)
+  CAF_ADD_ATOM(chatapp, login_atom)
+  CAF_ADD_ATOM(chatapp, logout_atom)
+  CAF_ADD_ATOM(chatapp, poke_atom)
+  CAF_ADD_ATOM(chatapp, post_atom)
+  CAF_ADD_ATOM(chatapp, print_atom)
+  CAF_ADD_ATOM(chatapp, quit_atom)
+  CAF_ADD_ATOM(chatapp, stop_atom)
+
+CAF_END_TYPE_ID_BLOCK(chatapp)
+
 /// for clients compute turn
 uint64_t fibonacci(uint8_t x) {
   if (x == 0 || x == 1) {
@@ -143,36 +148,36 @@ chat(caf::stateful_actor<chat_state>* self, const caf::actor initiator) {
       s.buffer.push_back(pl);
 #endif
       if (s.members.empty()) {
-        self->send(accumulator, stop_atom::value, action::post);
+        self->send(accumulator, stop_atom_v, action::post);
       } else {
-        self->send(accumulator, bump_atom::value, action::post,
+        self->send(accumulator, bump_atom_v, action::post,
                    s.members.size());
-        auto msg = caf::make_message(forward_atom::value, self, std::move(pl),
+        auto msg = caf::make_message(caf::forward_atom_v, self, std::move(pl),
                                      accumulator);
         for (auto& member : s.members)
           self->send(member, msg);
       }
     },
-    [=](join_atom, const caf::actor& client, const caf::actor& accumulator) {
+    [=](caf::join_atom, const caf::actor& client, const caf::actor& accumulator) {
       auto& s = self->state;
       s.members.emplace_back(client);
 #ifndef BENCH_NO_BUFFERED_CHATS
       if (!s.buffer.empty()) {
-        self->send(accumulator, bump_atom::value, action::ignore,
+        self->send(accumulator, bump_atom_v, action::ignore,
                    s.buffer.size());
         for (auto& message : s.buffer)
-          self->send(client, forward_atom::value, self, message, accumulator);
+          self->send(client, caf::forward_atom_v, self, message, accumulator);
       }
 #endif
-      self->send(client, accepted_atom::value, self, accumulator);
+      self->send(client, accepted_atom_v, self, accumulator);
     },
-    [=](leave_atom, const caf::actor& client, const bool did_logout,
+    [=](caf::leave_atom, const caf::actor& client, const bool did_logout,
         const caf::actor& accumulator) {
       auto& s = self->state;
       auto itr = std::find(s.members.begin(), s.members.end(), client);
       if (itr != s.members.end())
         s.members.erase(itr);
-      self->send(client, left_atom::value, self, did_logout, accumulator);
+      self->send(client, left_atom_v, self, did_logout, accumulator);
     },
   };
 }
@@ -192,19 +197,16 @@ client(caf::stateful_actor<client_state>* self, const uint64_t /*id*/,
   self->set_default_handler(caf::print_and_drop);
   return {
     [=](befriend_atom, const caf::actor& client) {
-      auto& s = self->state;
-      if (std::find(s.friends.begin(), s.friends.end(), client)
-          == s.friends.end())
-        s.friends.emplace_back(client);
+      self->state.friends.emplace_back(client);
     },
     [=](logout_atom) {
       auto& s = self->state;
       if (s.chats.empty()) {
-        self->send(directory, left_atom::value, self);
+        self->send(directory, left_atom_v, self);
         self->quit();
       } else
         for (auto& chat : s.chats)
-          self->send(chat, leave_atom::value, self, true, caf::actor{});
+          self->send(chat, caf::leave_atom_v, self, true, caf::actor{});
     },
     [=](left_atom, const caf::actor& chat, const bool did_logout,
         const caf::actor& accumulator) {
@@ -213,19 +215,19 @@ client(caf::stateful_actor<client_state>* self, const uint64_t /*id*/,
       if (itr != s.chats.end())
         s.chats.erase(itr);
       if (did_logout && s.chats.empty()) {
-        self->send(directory, left_atom::value, self);
+        self->send(directory, left_atom_v, self);
         self->quit();
       } else if (accumulator) {
-        self->send(accumulator, stop_atom::value, action::leave);
+        self->send(accumulator, stop_atom_v, action::leave);
       }
     },
     [=](accepted_atom, const caf::actor& chat, const caf::actor& accumulator) {
       self->state.chats.emplace_back(chat);
-      self->send(accumulator, stop_atom::value, action::ignore);
+      self->send(accumulator, stop_atom_v, action::ignore);
     },
-    [=](forward_atom, const caf::actor&, const payload&,
+    [=](caf::forward_atom, const caf::actor&, const payload&,
         const caf::actor& accumulator) {
-      self->send(accumulator, stop_atom::value, action::post_delivery);
+      self->send(accumulator, stop_atom_v, action::post_delivery);
     },
     [=](act_atom, behavior_factory& factory, const caf::actor& accumulator) {
       auto& s = self->state;
@@ -234,21 +236,21 @@ client(caf::stateful_actor<client_state>* self, const uint64_t /*id*/,
       switch (factory.apply(s.rand.next_int(100))) {
         case action::post:
           if (!s.chats.empty())
-            self->send(s.chats[index], post_atom::value, payload{},
+            self->send(s.chats[index], post_atom_v, payload{},
                        accumulator);
           else
-            self->send(accumulator, stop_atom::value, action::none);
+            self->send(accumulator, stop_atom_v, action::none);
           break;
         case action::leave:
           if (!s.chats.empty())
-            self->send(s.chats[index], leave_atom::value, self, false,
+            self->send(s.chats[index], caf::leave_atom_v, self, false,
                        accumulator);
           else
-            self->send(accumulator, stop_atom::value, action::none);
+            self->send(accumulator, stop_atom_v, action::none);
           break;
         case action::compute:
           fibonacci(35);
-          self->send(accumulator, stop_atom::value, action::compute);
+          self->send(accumulator, stop_atom_v, action::compute);
           break;
         case action::invite: {
           assert(s.friends.size() != 0);
@@ -261,15 +263,15 @@ client(caf::stateful_actor<client_state>* self, const uint64_t /*id*/,
             s.rand.next_int(static_cast<uint32_t>(s.friends.size())));
           if (invitations == 0)
             invitations = 1;
-          self->send(accumulator, bump_atom::value, action::invite,
+          self->send(accumulator, bump_atom_v, action::invite,
                      invitations);
           for (size_t i = 0; i < invitations; ++i)
-            self->send(created, join_atom::value, f[i], accumulator);
+            self->send(created, caf::join_atom_v, f[i], accumulator);
           break;
         }
         default: // case action::none:
-          assert(s.chats().size() == 0 && s.friends.size() > 0);
-          self->send(accumulator, stop_atom::value, action::none);
+          assert(s.chats.size() == 0 && s.friends.size() > 0);
+          self->send(accumulator, stop_atom_v, action::none);
           break;
       }
     },
@@ -285,8 +287,7 @@ struct directory_state {
 
 caf::behavior directory(caf::stateful_actor<directory_state>* self,
                         uint64_t seed, uint32_t befriend) {
-  auto& s = self->state;
-  s.random = pseudo_random(seed);
+  self->state.random = pseudo_random(seed);
   self->set_default_handler(caf::print_and_drop);
   return {
     [=](login_atom, uint64_t id) {
@@ -294,17 +295,14 @@ caf::behavior directory(caf::stateful_actor<directory_state>* self,
       s.clients.emplace_back(self->spawn(client, id, self, s.random.next()));
     },
     [=](befriend_atom) {
-      if (befriend != 0) {
-        auto& s = self->state;
-        for (const auto& fclient : s.clients) {
-          bool has_friend = false;
-          while (!has_friend) {
-            for (const auto& client : s.clients) {
-              if ((s.random.next_int(100) < befriend) and fclient != client) {
-                self->send(client, befriend_atom::value, fclient);
-                self->send(fclient, befriend_atom::value, client);
-                has_friend = true;
-              }
+      auto& s = self->state;
+      for (const auto& fclient : s.clients) {
+        for (auto found_friend = false; !found_friend;) {
+          for (const auto& client : s.clients) {
+            if ((s.random.next_int(100) < befriend) and fclient != client) {
+              self->send(client, befriend_atom_v, fclient);
+              self->send(fclient, befriend_atom_v, client);
+              found_friend = true;
             }
           }
         }
@@ -316,20 +314,20 @@ caf::behavior directory(caf::stateful_actor<directory_state>* self,
       if (itr != s.clients.end())
         s.clients.erase(itr);
       if (s.clients.empty()) {
-        self->send(s.poker, finished_atom::value);
+        self->send(s.poker, finished_atom_v);
         self->quit();
       }
     },
     [=](poke_atom, const behavior_factory& factory,
         const caf::actor& accumulator) {
       for (auto& client : self->state.clients)
-        self->send(client, act_atom::value, factory, accumulator);
+        self->send(client, act_atom_v, factory, accumulator);
     },
     [=](disconnect_atom, caf::actor& poker) {
       auto& s = self->state;
       s.poker = poker;
       for (auto& client : s.clients)
-        self->send(client, logout_atom::value);
+        self->send(client, logout_atom_v);
     },
   };
 }
@@ -372,11 +370,11 @@ caf::behavior accumulator(caf::stateful_actor<accumulator_state>* self,
                        s.end - s.start)
                        .count();
         s.did_stop = true;
-        self->send(poker, confirm_atom::value);
+        self->send(poker, confirm_atom_v);
       }
     },
     [=](print_atom, const caf::actor& collector, size_t i, size_t j) {
-      self->send(collector, collect_atom::value, i, j, self->state.duration,
+      self->send(collector, collect_atom_v, i, j, self->state.duration,
                  self->state.actions);
       self->quit();
     },
@@ -406,6 +404,7 @@ caf::behavior poker(caf::stateful_actor<poker_state>* self, uint64_t clients,
   s.logouts = 0;
   s.confirmations = 0;
   s.iteration = 0;
+
   self->set_default_handler(caf::print_and_drop);
   return {
     [=](apply_atom, caf::actor& bench, bool last) {
@@ -414,8 +413,7 @@ caf::behavior poker(caf::stateful_actor<poker_state>* self, uint64_t clients,
       s.directories.clear();
       s.directories.reserve(num_directories);
       for (size_t i = 0; i < num_directories; ++i)
-        s.directories.emplace_back(
-          self->spawn(directory, rand.next(), befriend));
+        s.directories.emplace_back(self->spawn(directory, rand.next(), befriend));
       s.confirmations = static_cast<size_t>(turns);
       s.logouts = s.directories.size();
       s.bench = bench;
@@ -429,16 +427,17 @@ caf::behavior poker(caf::stateful_actor<poker_state>* self, uint64_t clients,
 
       for (uint64_t client = 0; client < clients; ++client) {
         index = client % s.directories.size();
-        self->send(s.directories[index], login_atom::value, client);
+        self->send(s.directories[index], login_atom_v, client);
       }
       // To make sure that nobody's friendset is empty
-      for (const auto& dir : s.directories)
-        self->send(dir, befriend_atom::value);
+      if (befriend > 0)
+        for (const auto& dir : s.directories)
+          self->send(dir, befriend_atom_v);
       for (uint64_t i = 0; i < turns; ++i) {
         auto accu
           = self->spawn(accumulator, self, static_cast<size_t>(clients));
         for (const auto& directory : s.directories)
-          self->send(directory, poke_atom::value, factory, accu);
+          self->send(directory, poke_atom_v, factory, accu);
         s.runtimes.push_back(accu);
       }
     },
@@ -447,7 +446,7 @@ caf::behavior poker(caf::stateful_actor<poker_state>* self, uint64_t clients,
       --s.confirmations;
       if (s.confirmations == 0)
         for (auto& d : s.directories)
-          self->send(d, disconnect_atom::value, self);
+          self->send(d, disconnect_atom_v, self);
     },
     [=](finished_atom) {
       auto& s = self->state;
@@ -456,7 +455,7 @@ caf::behavior poker(caf::stateful_actor<poker_state>* self, uint64_t clients,
         size_t turn = 0;
         for (auto& accumulator : s.runtimes) {
           ++s.accumulations;
-          self->send(accumulator, print_atom::value, self, s.iteration, turn);
+          self->send(accumulator, print_atom_v, self, s.iteration, turn);
           ++turn;
         }
         s.runtimes.clear();
@@ -479,7 +478,7 @@ caf::behavior poker(caf::stateful_actor<poker_state>* self, uint64_t clients,
       if (s.accumulations == 0) {
         ++s.iteration;
         if (s.bench) {
-          self->send(s.bench, complete_atom::value);
+          self->send(s.bench, complete_atom_v);
 
           if (s.last) {
             sample_stats stats(s.turn_series);
@@ -523,7 +522,7 @@ caf::behavior poker(caf::stateful_actor<poker_state>* self, uint64_t clients,
                      << separator << s.actions[action::ignore] << "\nNone"
                      << separator << s.actions[action::none] << std::endl;
 
-            self->send(s.bench, append_atom::value, title_text.str(),
+            self->send(s.bench, append_atom_v, title_text.str(),
                        result_text.str(), act_text.str());
             self->quit();
           }
@@ -546,9 +545,6 @@ struct config : caf::actor_system_config {
   uint64_t befriend = 10;
   bool parseable = false;
   config() {
-    add_message_type<std::vector<uint8_t>>("std::vector<uint8_t>");
-    add_message_type<std::vector<double>>("std::vector<double>");
-    add_message_type<behavior_factory>("behavior_factory");
     opt_group{custom_options_, "global"}
       .add(run, "run,r", "The number of iterations. Defaults to 32")
       .add(clients, "clients,c", "The number of clients. Defaults to 1024.")
@@ -580,11 +576,11 @@ chatapp(caf::stateful_actor<chatapp_state>* self, const uint64_t clients,
                                 factory, parseable);
   return {
     [=](apply_atom, caf::actor& async_benchmark_completion, bool last) {
-      self->send(poke_actor, apply_atom::value, async_benchmark_completion,
+      self->send(poke_actor, apply_atom_v, async_benchmark_completion,
                  last);
     },
     [=](quit_atom) {
-      self->send(poke_actor, quit_atom::value);
+      self->send(poke_actor, quit_atom_v);
       self->quit();
     },
   };
@@ -599,10 +595,9 @@ void caf_main(caf::actor_system& system, const config& cfg) {
       << "Invalid arguments! Clients are not at least twice the directories."
       << std::endl;
     return;
-  } else if (cfg.befriend == 0 && cfg.invite != 0) {
-    std::cerr << "Invalid arguments! Invite probability need a befriend "
-                 "probability > 0."
-              << std::endl;
+  } else if (cfg.befriend == 0 && cfg.invite > 0) {
+    std::cerr << "Invalid arguments! Without a befriend chance all invites "
+                 "will fail" << std::endl;
     return;
   } else {
     auto chat = system.spawn(chatapp, cfg.clients, cfg.turns, cfg.directories,
@@ -612,7 +607,7 @@ void caf_main(caf::actor_system& system, const config& cfg) {
     std::vector<double> durations;
     auto perform_run = [&](bool collect_data) {
       auto start = std::chrono::high_resolution_clock::now();
-      self->send(chat, apply_atom::value, self, collect_data);
+      self->send(chat, apply_atom_v, self, collect_data);
       self->receive([start, &durations](complete_atom) {
         auto end = std::chrono::high_resolution_clock::now();
         durations.emplace_back(
@@ -644,8 +639,8 @@ void caf_main(caf::actor_system& system, const config& cfg) {
       std::cout << result_text.str();
       std::cout << title << result << act;
     });
-    self->send(chat, quit_atom::value);
+    self->send(chat, quit_atom_v);
   }
 }
 
-CAF_MAIN(caf::io::middleman)
+CAF_MAIN(caf::id_block::chatapp)
