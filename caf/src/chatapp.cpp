@@ -20,6 +20,7 @@ enum class action : uint8_t {
   invite,
   compute,
   ignore,
+  error,
   none
 };
 
@@ -247,8 +248,11 @@ client(caf::stateful_actor<client_state>* self, const uint64_t /*id*/,
             self->send(accumulator, stop_atom::value, action::none);
           break;
         case action::compute:
-          fibonacci(35);
-          self->send(accumulator, stop_atom::value, action::compute);
+          if (fibonacci(35) == 9227465) {
+            self->send(accumulator, stop_atom::value, action::compute);
+          } else {;
+            self->send(accumulator, stop_atom::value, action::error);
+          }
           break;
         case action::invite: {
           assert(s.friends.size() != 0);

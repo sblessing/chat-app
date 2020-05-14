@@ -170,11 +170,11 @@ actor Client
       | Post => _chats(index)?.post(None, accumulator)
       | Leave => _chats(index)?.leave(this, false, accumulator)
       | Compute => 
-        if not Fibonacci(35) == 9_227_465 then
+        if Fibonacci(35) == 9_227_465 then
+          accumulator.stop(Compute)
+        else
           accumulator.stop(Error)
         end
-
-        accumulator.stop(Compute)
       | Invite =>
         let created = Chat(this)
 
