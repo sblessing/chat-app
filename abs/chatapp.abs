@@ -1,0 +1,337 @@
+module ChatApp;
+
+// Written by Einar Broch Johnsen
+
+export * from ChatApp;
+
+type Turn = Int;
+
+def List<T> randomSublist<T>(List<T> list, Int prob) =
+    when (Nil == list) then Nil
+        else when (random(100) < prob)
+            then Cons(head(list),randomSublist(tail(list),prob))
+            else randomSublist(tail(list),prob);
+
+def Int fibonacci(Int x) =
+    case x {
+    0 => 0;
+    1 => 1;
+    _ => fibonacci(x-2) + fibonacci(x-1);
+    };
+
+data Action = Compute | Post | Leave | Invite | None ;
+
+data ProbabilityDist = ProbabilityDist(Int compute, Int post, Int invite, Int leave);
+
+def Int totalProb(ProbabilityDist p) = compute(p) + post(p) + invite(p) + leave(p);
+
+def Action action(ProbabilityDist p) =
+    let Int roll = random(totalProb(p)) in
+        when roll < compute(p) then Compute
+        else when roll < (compute(p) + post(p)) then Post
+        else when roll < (compute(p) + post(p) + invite(p)) then Invite
+        else when roll < (compute(p) + post(p) + invite(p) + leave(p)) then Leave
+        else None;              //shouldn’t happen
+
+interface Accumulator {
+    Unit bump(Int newexpected);
+    Unit stop();
+    }
+
+interface Chat {
+    Unit join(Client client, Accumulator acc);
+    Unit leave(Client client, Bool logout, Maybe<Accumulator> acc);
+    Unit post(String s, Client client, Accumulator acc);
+}
+
+interface Client {
+    Unit act(Accumulator acc);
+    Unit befriend(Client client);
+    Unit forward(String s, Accumulator acc);
+    Unit join(Chat chat, Accumulator acc);
+    Unit logout();
+}
+
+interface Directory {
+    Unit disconnect(Poker p);
+    Unit leave(Client cl);
+    Unit login(Client cl);
+    Unit befriend();
+    Unit poke(Int turn, Accumulator acc);
+}
+
+interface Poker {
+    Unit apply(ProbabilityDist pd, Int iteration);
+    Unit confirm(Pair<Turn,Int> accdur);
+    Unit finished();
+    Unit start(ProbabilityDist pd_simple, Int remainingIterations);
+}
+
+class Accum(Int expect, Turn turn, Poker poker) implements Accumulator {
+    Int start = ms_since_model_start(); // start time
+    Bool did_stop = False;
+    Int expected = expect;
+
+    Unit bump(Int newexpected){ expected = expected + newexpected; }
+
+    Unit stop() {
+        assert expected > 0;
+        expected = expected - 1;
+        if (expected == 0)  { // this is the last task
+            Int end = ms_since_model_start(); // end time
+            did_stop = True;
+            poker!confirm(Pair(turn, end-start));
+        }
+    }
+}
+
+
+class ChatImp (Client initiator) implements Chat {
+    List<Client> participants = list[initiator];
+    List<String> buffer = Nil; // Note: buffer is in "reverse" order
+
+    Unit join (Client client, Accumulator acc) {
+        // Dump buffer on client, bump length of buffer
+        participants = Cons(client,participants);
+        if (buffer == Nil) { acc!stop(); } // Nothing to do...
+        else {
+            acc.bump(length(buffer));
+            foreach (str in buffer) {  client!forward(str,acc); }
+            acc!stop();
+        }
+    }
+
+    Unit leave(Client client, Bool logout, Maybe<Accumulator> optAcc){ // Bump if not logout
+        participants = without(participants,client);
+        if (not(logout)) {
+            switch (optAcc) {
+                Nothing => println("ERROR!");
+                Just(acc) => acc!stop();
+            }
+        }
+    }
+
+    Unit post(String s, Client client, Accumulator acc) {  // Bump number of receivers
+        buffer = Cons(s,buffer);
+        if (length(participants) < 2){ acc!stop(); } // Task completed
+        else {
+            List<Client> receivers = without(participants,client); // Do not send to sender
+            await acc!bump(length(receivers));
+            foreach (participant in receivers) { participant!forward(s,acc); }
+            acc!stop();
+        }
+    }
+}
+
+class Client(ProbabilityDist prob, Int sizeOfComp, Int inviteProb) implements Client {
+    List<Chat> chats = Nil;
+    List<Client> friends = Nil;
+    Int r = 0;
+
+    Unit act(Accumulator acc) { // Receives the poke from the main block
+
+        switch (action(prob)) {
+            Compute => this.compute(acc);
+            Post => this.post(acc);
+            Leave => this.leave(acc);
+            Invite => this.invite(acc);
+            None => acc!stop(); // no action
+        }
+    }
+
+    Unit befriend(Client client) {
+        // This is probably not the fastest way to repeatedly add unique
+        // elements to a list
+        friends = Cons(client,without(friends, client));
+    }
+
+    Unit compute(Accumulator acc){ // Bump when finished.
+        fibonacci(sizeOfComp);
+        acc!stop();
+    }
+
+    Unit forward(String s, Accumulator acc){ acc!stop();}
+
+    Unit invite(Accumulator acc){ // Sends invitation. Bump on number of invited.
+        if (friends != Nil)  {
+            List<Client> mygroup = randomSublist(friends,inviteProb);
+            await acc!bump(length(mygroup));
+            Chat chat = new ChatImp(this);
+            chats = Cons(chat,chats);
+            foreach (client in mygroup) { client!join(chat, acc); }
+        }
+        acc!stop();
+    }
+
+    Unit join(Chat chat,Accumulator acc){ // Receives invitation, passes bump to chat
+        chats = Cons(chat,chats);
+        chat!join(this, acc);
+    }
+
+    Unit leave(Accumulator acc){ // Leaves chat, bump passed to chat
+        if (Nil == chats) { acc!stop(); }
+        else {
+            Chat chat = nth(chats,random(length(chats)));
+            chats = without(chats, chat);
+            chat!leave(this,False,Just(acc));
+        }
+    }
+
+    Unit linger() { skip; } // Does nothing
+
+    Unit logout(){ foreach (chat in chats) { await chat!leave(this, True, Nothing); }} // No bumping here!
+
+    Unit post(Accumulator acc) { // Posts on random chat, bump passed to chat
+        if (chats==Nil) { acc!stop(); }
+        else {
+            Int r = random(length(chats));
+            Chat chat = nth(chats,r);
+            chat!post("whatever",this,acc);
+        }
+    }
+}
+
+
+class DirectoryImp(Int befriend_threshold) implements Directory {
+    List<Client> clients = Nil;
+
+    Unit leave(Client cl){ clients = without(clients,cl); }
+
+    Unit login(Client cl){ // Not measured, no bumping
+        clients = Cons(cl,clients);
+    }
+
+    Unit befriend() {
+        List<Fut<Unit>> futfriends = Nil;
+
+        foreach(client1 in clients) {
+            foreach(client2 in clients) {
+                if (random(100) < befriend_threshold) {
+                    Fut<Unit> f= client1!befriend(client2);
+                    futfriends = Cons(f,futfriends);
+                    f=client2!befriend(client1);
+                    futfriends = Cons(f,futfriends);
+                }
+            }
+        }
+        foreach (fut in futfriends) { await fut?;} // All friends ack here
+    }
+
+    Unit poke(Int turn, Accumulator acc) { foreach (client in clients) { client!act(acc); } }
+
+    Unit disconnect(Poker p){
+        foreach (cl in clients) {
+            clients = without(clients,cl);
+            cl.logout(); }
+    }
+}
+
+class PokerImp(Int nbrOfDirectories, Int nbrOfClients, Turn nbrOfTurns,
+               Int befriend_threshold, Int inviteProb,Int sizeOfComp)
+    implements Poker
+{
+    List<Directory> dirs = Nil;
+    Map<Int,Map<Int,Int>> values = map[];
+    Int remainingTurns = nbrOfTurns;
+    Int nbrOfIterations = 0;
+    Int iteration = 0;
+    List<Accumulator> accumulators = Nil;
+    Bool flag = False;
+    Map<Turn,Int> mydurations = map[];
+
+    { // Init block of Poker object
+        Int nbr = nbrOfDirectories;
+        Directory dir;
+        while (nbr > 0){ // Create directories
+            dir = new DirectoryImp(befriend_threshold);
+            dirs = Cons(dir,dirs);
+            nbr = nbr -1;
+        }
+    }
+
+    Unit apply(ProbabilityDist pd, Int iteration){
+        Int index = 0;
+        Fut<Unit> f;
+        List<Fut<Unit>> futlist = Nil;
+
+        // Create clients
+        Int nbr = nbrOfClients;
+        while (nbr > 0){
+            Client cl = new Client(pd,sizeOfComp,inviteProb);
+            index = (nbr % nbrOfDirectories);
+            f= nth(dirs,index)!login(cl);
+            futlist = Cons(f,futlist);
+            nbr = nbr - 1;
+        }
+        foreach (fut in futlist) { await fut?; }
+        futlist = Nil;
+        foreach (directory in dirs) {
+            f = directory!befriend();
+            futlist = Cons(f, futlist);
+        }
+        foreach (fut in futlist) { await fut?; }
+        Turn turn = nbrOfTurns;
+        while (turn > 0) { // ... and run!
+            Accumulator acc = new Accum(nbrOfClients,turn,this); // Acc for this turn
+            foreach (directory in dirs) { directory!poke(turn,acc); }
+            accumulators = Cons(acc,accumulators); // Add acc to accumulators.
+            turn = turn -1;
+        }
+    }
+
+    Unit confirm(Pair<Turn,Int> accdur) {
+        // Map<Turn,Int> myvalues = map[]; // store results from one run
+        // println("Poker received all confirms! (confirmations=" + toString(confirmations)
+        // + ", directories=" + toString(length(dirs))
+        // + ", iterations=" + toString(iteration) + ")");
+        mydurations = insert(mydurations,accdur); // Store duration of this turn
+        // println("mydurations = "+toString(mydurations));
+        remainingTurns = remainingTurns - 1;
+        if (remainingTurns == 0) {
+            foreach (dir in dirs){ await dir!disconnect(this); }
+            // foreach (accum in accumulators) { // Iteration is finished
+            //	Pair<Int,Int> val = accum.getVal();
+            //	myvalues = insert(myvalues,val);
+            //	values = insert(values,Pair(iteration, myvalues));
+            values = insert(values,Pair(iteration, mydurations));
+            // println("Values = "+toString(values));
+            iteration = iteration - 1;
+            if (iteration > 0) { remainingTurns = nbrOfTurns; }
+            else { flag = True; }
+        }
+    }
+
+    Unit finished(){
+        await flag;
+        Int i = 1;
+        Int j = 0;
+        while (i <= nbrOfIterations){
+            println("");
+            println(`Results from iteration $i$`);
+            Map<Int,Int> vals = lookupDefault(values,i,map[]);
+            j=1;
+            while (j <= nbrOfTurns) {
+                Int val = lookupDefault(vals,j,-1000);
+                println(`Iteration $i$, turn $j$: $val$`);
+                j = j+1;
+            }
+            i = i+1;
+        }
+    }
+
+    Unit start(ProbabilityDist pd, Int remainingIterations){
+        iteration = remainingIterations;
+        nbrOfIterations = remainingIterations;
+        while (remainingIterations > 0){
+            // println("Poker is starting iteration "+toString(remainingIterations));
+            this!apply(pd,remainingIterations);
+            // print("Poker has finished iteration "+toString(remainingIterations));
+            remainingIterations = remainingIterations -1;
+            // println(" (remaining = "+toString(remainingIterations)+", iterations = "+toString(iteration)+")");
+            await (remainingIterations==iteration);
+        }
+        // println("Poker calls finished()");
+        this.finished();
+    }
+}
+
