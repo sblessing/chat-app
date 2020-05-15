@@ -241,11 +241,19 @@ class Chat usingPlatform: platform = Value (
     )
 
     private compute: accumulator = (
-      | result = fibonacci: 35. |
-     
-      result = 9227465 
-        ifTrue:  [ accumulator <-: stop: #compute. #noPromise ]
-        ifFalse: [ accumulator <-: stop: #error. #noPromise ].
+      | result = 0. |
+
+      1 to: 10000 do: [:i |
+        result:: fibonacci: 35.
+        
+        result = 9227465
+          ifFalse: [ 
+            accumulator <-: stop: #error. #noPromise. 
+            ^self.
+          ].
+      ].
+    
+      accumulator <-: stop: #compute. #noPromise. 
     )
 
     private invite: accumulator = (

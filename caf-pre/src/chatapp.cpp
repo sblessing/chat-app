@@ -250,10 +250,14 @@ client(caf::stateful_actor<client_state>* self, const uint64_t /*id*/,
             self->send(accumulator, stop_atom_v, action::none);
           break;
         case action::compute:
-          if (fibonacci(35) == 9227465)
-            self->send(accumulator, stop_atom_v, action::compute);
-          else
-            self->send(accumulator, stop_atom_v, action::error);
+	  for(size_t i = 0; i < 10000; ++i) {
+            if (fibonacci(35) != 9227465) {
+              self->send(accumulator, stop_atom_v, action::error);
+	      return;
+	    }
+	  }
+
+	  self->send(accumulator, stop_atom_v, action::compute);
           break;
         case action::invite: {
           assert(s.friends.size() != 0);

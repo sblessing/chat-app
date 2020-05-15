@@ -121,6 +121,7 @@ actor Client
   let _directory: Directory
   let _dice: DiceRoll
   let _rand: SimpleRand
+  var _fib_index: U8
 
   new create(id: U64, directory: Directory, seed: U64) =>
     _id = id
@@ -129,6 +130,7 @@ actor Client
     _directory = directory
     _rand = SimpleRand(seed)
     _dice = DiceRoll(_rand)
+    _fib_index = 35
 
   be befriend(client: Client) =>
     _friends.push(client)
@@ -170,11 +172,16 @@ actor Client
       | Post => _chats(index)?.post(None, accumulator)
       | Leave => _chats(index)?.leave(this, false, accumulator)
       | Compute => 
-        if Fibonacci(35) == 9_227_465 then
-          accumulator.stop(Compute)
-        else
-          accumulator.stop(Error)
+        for i in Range[U64](0, 10000) do
+          if Fibonacci(_fib_index) != 9_227_465 then
+            // This never happens, but makes it impossible for LLVM
+            // to opt-out this entire loop.
+            accumulator.stop(Error)
+            _fib_index = _fib_index + 1
+          end
         end
+
+        accumulator.stop(Compute)
       | Invite =>
         let created = Chat(this)
 
