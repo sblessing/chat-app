@@ -215,7 +215,7 @@ class Chat usingPlatform: platform = Value (
       j:: n / 2.
       fibJ:: fibonacci: j.
       fibI:: fibonacci: j - 1.
-      n % 2 = 0 ifTrue: [ ^ fibJ * (fibJ * (fibI * 2)) ].
+      n % 2 = 0 ifTrue: [ ^ fibJ * (fibJ + (fibI * 2)) ].
       n % 4 = 1
         ifTrue:  [ ^ ((fibJ * 2) + fibI) * ((fibJ * 2) - fibI) + 2 ]
         ifFalse: [ ^ ((fibJ * 2) + fibI) * ((fibJ * 2) - fibI) - 2 ]
@@ -241,9 +241,11 @@ class Chat usingPlatform: platform = Value (
     )
 
     private compute: accumulator = (
-      fibonacci: 35.
-      accumulator <-: stop: #compute.
-      #noPromise
+      | result = fibonacci: 35. |
+     
+      result = 9227465 
+        ifTrue:  [ accumulator <-: stop: #compute. #noPromise ]
+        ifFalse: [ accumulator <-: stop: #error. #noPromise ].
     )
 
     private invite: accumulator = (
@@ -354,7 +356,7 @@ class Chat usingPlatform: platform = Value (
 
   class Accumulator new: p expected: anInt turns: i = (
   | private turn = i.
-    private actions = TransferArray new: 7 withAll: 0.
+    private actions = TransferArray new: 8 withAll: 0.
     private poker = p.
     private start = system ticks. (* Microseconds *)
     private duration ::= 0.0.
@@ -373,8 +375,9 @@ class Chat usingPlatform: platform = Value (
       action = #invite       ifTrue: [ actions at: 4 put: 1 + (actions at: 4). ^ self ].
       action = #compute      ifTrue: [ actions at: 5 put: 1 + (actions at: 5). ^ self ].
       action = #ignore       ifTrue: [ actions at: 6 put: 1 + (actions at: 6). ^ self ].
+      action = #error        ifTrue: [ actions at: 7 put: 1 + (actions at: 7). ^ self ].
 
-      actions at: 7 put: 1 + (actions at: 7)
+      actions at: 8 put: 1 + (actions at: 8)
     )
 
     public stop: action = (
@@ -401,7 +404,7 @@ class Chat usingPlatform: platform = Value (
   )
 
   class Poker clients: clients turns: numTurns directories: dirs befriend: befriend factory: factory = (
-  | private actions = Array new: 7 withAll: 0.
+  | private actions = Array new: 8 withAll: 0.
     private clients = clients.
     private befriend = befriend.
     private dirs = dirs.
@@ -483,7 +486,7 @@ class Chat usingPlatform: platform = Value (
     )
 
     public collect: i j: j duration: duration actions: actionArr <TransferArray> = (
-      1 to: 7 do: [:i |
+      1 to: 8 do: [:i |
         actions at: i put: (actions at: i) + (actionArr at: i) ].
 
 
@@ -540,7 +543,8 @@ class Chat usingPlatform: platform = Value (
         ('Invite,'       + (actions at: 4)) println.
         ('Compute,'      + (actions at: 5)) println.
         ('Ignore,'       + (actions at: 6)) println.
-        ('None,'         + (actions at: 7)) println.
+        ('Error,'        + (actions at: 7)) println.
+        ('None,'         + (actions at: 8)) println.
     )
   )
 
