@@ -230,6 +230,7 @@ client(caf::stateful_actor<client_state>* self, const uint64_t /*id*/,
     },
     [=](act_atom, behavior_factory& factory, const caf::actor& accumulator) {
       auto& s = self->state;
+      uint8_t fib_index = 35;
       auto index = static_cast<size_t>(
         s.rand.next_int(static_cast<uint32_t>(s.chats.size())));
       switch (factory.apply(s.rand.next_int(100))) {
@@ -249,9 +250,9 @@ client(caf::stateful_actor<client_state>* self, const uint64_t /*id*/,
           break;
         case action::compute:
 	  for(size_t i = 0; i < 10000; ++i) {
-            if (fibonacci(35) != 9227465) {
+            if (fibonacci(fib_index) != 9227465) {
               self->send(accumulator, stop_atom::value, action::error);
-	      return;
+	      fib_index = fib_index + 1;;
 	    }
 	  }
 
