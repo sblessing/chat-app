@@ -10,3 +10,4 @@ pony.exe
 *.pdb
 */build/
 .idea/
+/akka/target
