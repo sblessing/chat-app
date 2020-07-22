@@ -1,25 +1,21 @@
+enablePlugins(JavaAppPackaging)
+
 name := "chat-app"
-
 version := "1.0"
-
 scalaVersion := "2.13.1"
-// semanticdbEnabled := true // enable SemanticDB
-// semanticdbVersion := scalafixSemanticdb.revision // use Scalafix compatible version
+organization := "chatapp"
+val akkaVersion = "2.6.8"
 
-// addCompilerPlugin(scalafixSemanticdb) // enable SemanticDB
-scalacOptions ++= List(
-  "-Yrangepos",          // required by SemanticDB compiler plugin
-  // "-Ywarn-unused-import" // required by `RemoveUnused` rule
+scalacOptions ++= Seq(
+  "-feature",
+  "-deprecation",
+  "-Xfatal-warnings"
 )
-
-lazy val akkaVersion = "2.6.7"
-
-// addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.6.3")
-// addSbtPlugin("ch.epfl.scala" % "sbt-scalafix" % "0.9.19")
 
 libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-actor-typed" % akkaVersion,
   "ch.qos.logback" % "logback-classic" % "1.2.3",
-  "com.typesafe.akka" %% "akka-actor-testkit-typed" % akkaVersion % Test,
-  "org.scalatest" %% "scalatest" % "3.1.0" % Test
 )
+
+mainClass in Compile := Some("chatapp.Main")
+discoveredMainClasses in Compile := Seq()
