@@ -2,7 +2,6 @@ package chatapp.utils.random
 
 import scala.collection.mutable
 
-
 class SimpleRand(seed: Long) {
   var value: Long = seed
 
@@ -28,7 +27,7 @@ class SimpleRand(seed: Long) {
 
     while (i > 1) {
       i -= 1
-      val ceil = i
+      val ceil  = i
       val randI = nextInt(ceil)
 
       val tmp = array(ceil)
